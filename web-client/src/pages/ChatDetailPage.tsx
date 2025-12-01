@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { MessageInput } from '@/components/chat/MessageInput';
-import { getChatById, getMessagesByChatId } from '@/data/chats';
-import type { Message } from '@/types/chat';
+import { chatApi } from '@/api/client';
+import type { Chat, Message } from '@/types/chat';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -14,15 +14,51 @@ export function ChatDetailPage() {
   const { chatId } = useParams<{ chatId: string }>();
   const navigate = useNavigate();
 
-  const chat = chatId ? getChatById(chatId) : undefined;
-  const initialMessages = chatId ? getMessagesByChatId(chatId) : [];
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [chat, setChat] = useState<Chat | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!chat) {
+  useEffect(() => {
+    const fetchChatData = async () => {
+      if (!chatId) {
+        setError('No chat ID provided');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const [chatData, messagesData] = await Promise.all([
+          chatApi.getChatById(chatId),
+          chatApi.getChatMessages(chatId),
+        ]);
+        setChat(chatData);
+        setMessages(messagesData);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load chat');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchChatData();
+  }, [chatId]);
+
+  if (loading) {
+    return (
+      <AppLayout title="Loading...">
+        <div className="max-w-2xl mx-auto text-center py-12">
+          <p className="text-muted-foreground">Loading chat...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (error || !chat) {
     return (
       <AppLayout title="Chat Not Found">
         <div className="max-w-2xl mx-auto text-center py-12">
-          <p className="text-muted-foreground mb-4">Chat not found</p>
+          <p className="text-muted-foreground mb-4">{error || 'Chat not found'}</p>
           <Button onClick={() => navigate('/')}>
             Back to Chats
           </Button>

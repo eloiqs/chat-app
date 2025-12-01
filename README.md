@@ -1,17 +1,87 @@
-# React + TypeScript + Vite
+# React Data Fetching with NestJS Backend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A monorepo project with a React frontend (web-client) and NestJS backend (server) for demonstrating data fetching patterns in a chat application.
 
-Currently, two official plugins are available:
+## Project Structure
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```
+.
+├── web-client/          # React + TypeScript + Vite frontend
+│   ├── src/
+│   │   ├── api/         # API client for server communication
+│   │   ├── components/  # React components
+│   │   ├── pages/       # Page components
+│   │   └── types/       # TypeScript type definitions
+│   └── package.json
+├── server/              # NestJS backend
+│   ├── src/
+│   │   ├── chat/        # Chat module (controller & service)
+│   │   ├── app.module.ts
+│   │   └── main.ts
+│   └── package.json
+└── package.json         # Root workspace configuration
+```
 
-## React Compiler
+## Getting Started
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+### Install Dependencies
 
-Note: This will impact Vite dev & build performances.
+```bash
+npm install
+```
+
+This will install dependencies for both the web-client and server packages.
+
+### Development
+
+Run both the frontend and backend simultaneously:
+
+```bash
+npm run dev:all
+```
+
+Or run them separately:
+
+```bash
+# Run only the web-client (frontend)
+npm run dev
+
+# Run only the server (backend)
+npm run dev:server
+```
+
+The web-client will be available at `http://localhost:5173` and the server at `http://localhost:3000`.
+
+### Build
+
+Build both packages:
+
+```bash
+npm run build
+```
+
+## Tech Stack
+
+### Web Client
+- React 19
+- TypeScript
+- Vite
+- React Router
+- Tailwind CSS
+- Radix UI components
+
+### Server
+- NestJS
+- TypeScript
+- Express
+
+## Features
+
+- Chat list with real-time data fetching
+- Individual chat views with message history
+- RESTful API for chat data
+- CORS enabled for cross-origin requests
+- Type-safe API client
 
 ## Expanding the ESLint configuration
 
