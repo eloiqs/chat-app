@@ -1,4 +1,4 @@
-import { type Chat } from '@/types/chat';
+import type { Chat } from 'shared';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Link } from 'react-router-dom';

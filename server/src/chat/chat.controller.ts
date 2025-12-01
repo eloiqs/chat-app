@@ -1,9 +1,10 @@
 import { Controller, Get, Param } from '@nestjs/common';
-import { ChatService, Chat, Message } from './chat.service';
+import type { Chat, Message } from 'shared';
+import { ChatService } from './chat.service';
 
 @Controller('api/chats')
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(private readonly chatService: ChatService) { }
 
   @Get()
   getAllChats(): Chat[] {

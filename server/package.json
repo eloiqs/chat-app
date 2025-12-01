@@ -15,7 +15,8 @@
     "@nestjs/core": "^10.4.4",
     "@nestjs/platform-express": "^10.4.4",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "shared": "*"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.5",

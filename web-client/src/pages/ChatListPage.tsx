@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
+import type { Chat } from 'shared';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ChatListItem } from '@/components/chat/ChatListItem';
 import { chatApi } from '@/api/client';
-import type { Chat } from '@/types/chat';
 
 export function ChatListPage() {
   const [chats, setChats] = useState<Chat[]>([]);

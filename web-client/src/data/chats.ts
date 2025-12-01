@@ -1,4 +1,4 @@
-import type { Chat, Message } from '@/types/chat';
+import type { Chat, Message } from 'shared';
 
 export const messages: Message[] = [
   // Chat 1 messages

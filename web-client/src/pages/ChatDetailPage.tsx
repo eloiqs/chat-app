@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import type { Chat, Message } from 'shared';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { MessageInput } from '@/components/chat/MessageInput';
 import { chatApi } from '@/api/client';
-import type { Chat, Message } from '@/types/chat';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -28,12 +28,12 @@ export function ChatDetailPage() {
       }
 
       try {
-        const [chatData, messagesData] = await Promise.all([
+        const [chatData, messages] = await Promise.all([
           chatApi.getChatById(chatId),
-          chatApi.getChatMessages(chatId),
+          chatApi.getChatMessages(chatId)
         ]);
         setChat(chatData);
-        setMessages(messagesData);
+        setMessages(messages);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load chat');
       } finally {

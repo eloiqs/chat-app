@@ -1,4 +1,4 @@
-import type { Chat, Message } from '@/types/chat';
+import type { Chat, Message } from 'shared';
 
 const API_BASE_URL = 'http://localhost:3000/api';
 

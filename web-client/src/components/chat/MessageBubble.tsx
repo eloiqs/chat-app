@@ -1,4 +1,4 @@
-import type { Message } from '@/types/chat';
+import type { Message } from 'shared';
 import { cn } from '@/lib/utils';
 
 interface MessageBubbleProps {
