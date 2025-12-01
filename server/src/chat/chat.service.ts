@@ -192,4 +192,18 @@ export class ChatService {
           new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
       );
   }
+
+  createMessage(chatId: string, content: string): Message {
+    const newMessage: Message = {
+      id: `m${Date.now()}`,
+      chatId,
+      content,
+      sender: 'You',
+      timestamp: new Date().toISOString(),
+      isCurrentUser: true,
+    };
+
+    this.messages.push(newMessage);
+    return newMessage;
+  }
 }

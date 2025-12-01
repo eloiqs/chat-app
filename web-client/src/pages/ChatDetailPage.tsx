@@ -67,17 +67,15 @@ export function ChatDetailPage() {
     );
   }
 
-  const handleSendMessage = (content: string) => {
-    const newMessage: Message = {
-      id: `m${Date.now()}`,
-      chatId: chat.id,
-      content,
-      sender: 'You',
-      timestamp: new Date().toISOString(),
-      isCurrentUser: true,
-    };
+  const handleSendMessage = async (content: string) => {
+    if (!chatId) return;
 
-    setMessages([...messages, newMessage]);
+    try {
+      const newMessage = await chatApi.sendMessage(chatId, content);
+      setMessages([...messages, newMessage]);
+    } catch (err) {
+      console.error('Failed to send message:', err);
+    }
   };
 
   return (

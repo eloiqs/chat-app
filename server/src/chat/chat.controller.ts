@@ -1,4 +1,4 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Post, Body } from '@nestjs/common';
 import type { Chat, Message } from 'shared';
 import { ChatService } from './chat.service';
 
@@ -19,5 +19,13 @@ export class ChatController {
   @Get(':id/messages')
   getChatMessages(@Param('id') id: string): Message[] {
     return this.chatService.getChatMessages(id);
+  }
+
+  @Post(':id/messages')
+  createMessage(
+    @Param('id') id: string,
+    @Body() body: { content: string }
+  ): Message {
+    return this.chatService.createMessage(id, body.content);
   }
 }
