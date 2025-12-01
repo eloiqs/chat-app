@@ -13,5 +13,8 @@
     "dev:all": "npm run dev --workspace=web-client & npm run dev --workspace=server",
     "build": "npm run build --workspaces",
     "lint": "npm run lint --workspaces"
+  },
+  "devDependencies": {
+    "prettier": "^3.7.3"
   }
 }

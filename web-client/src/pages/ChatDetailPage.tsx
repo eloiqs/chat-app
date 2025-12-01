@@ -4,7 +4,7 @@ import type { Chat, Message } from 'shared';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { MessageInput } from '@/components/chat/MessageInput';
-import { chatApi } from '@/api/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -13,6 +13,7 @@ import { Card } from '@/components/ui/card';
 export function ChatDetailPage() {
   const { chatId } = useParams<{ chatId: string }>();
   const navigate = useNavigate();
+  const { chatApi } = useAuth();
 
   const [chat, setChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -42,7 +43,7 @@ export function ChatDetailPage() {
     };
 
     fetchChatData();
-  }, [chatId]);
+  }, [chatId, chatApi]);
 
   if (loading) {
     return (
@@ -58,7 +59,9 @@ export function ChatDetailPage() {
     return (
       <AppLayout title="Chat Not Found">
         <div className="max-w-2xl mx-auto text-center py-12">
-          <p className="text-muted-foreground mb-4">{error || 'Chat not found'}</p>
+          <p className="text-muted-foreground mb-2">
+            {error}
+          </p>
           <Button onClick={() => navigate('/')}>
             Back to Chats
           </Button>

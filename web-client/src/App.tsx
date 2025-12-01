@@ -2,15 +2,39 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ChatListPage } from '@/pages/ChatListPage';
 import { ChatDetailPage } from '@/pages/ChatDetailPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
+import { UserSelectionPage } from '@/pages/UserSelectionPage';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+
+function AppRoutes() {
+  const { currentUser, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <UserSelectionPage />;
+  }
+
+  return (
+    <Routes>
+      <Route path="/" element={<ChatListPage />} />
+      <Route path="/chat/:chatId" element={<ChatDetailPage />} />
+      <Route path="*" element={<NotFoundPage />} />
+    </Routes>
+  );
+}
 
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<ChatListPage />} />
-        <Route path="/chat/:chatId" element={<ChatDetailPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
     </BrowserRouter>
   );
 }

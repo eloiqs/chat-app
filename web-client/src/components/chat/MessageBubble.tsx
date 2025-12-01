@@ -22,7 +22,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     >
       {!message.isCurrentUser && (
         <span className="text-xs text-muted-foreground mb-1 px-2">
-          {message.sender}
+          {message.sender.name}
         </span>
       )}
 
