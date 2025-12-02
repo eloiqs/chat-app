@@ -10,6 +10,14 @@ export interface ChatApiClient {
   markChatAsRead(chatId: string): Promise<void>;
 }
 
+export async function getAllUsers(): Promise<User[]> {
+  const response = await fetch(`${API_BASE_URL}/chats/users`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch users');
+  }
+  return response.json();
+}
+
 export function createChatApi(userId: string | null): ChatApiClient {
   const getHeaders = () => {
     const headers: HeadersInit = {
@@ -74,12 +82,4 @@ export function createChatApi(userId: string | null): ChatApiClient {
       }
     },
   };
-}
-
-export async function getAllUsers(): Promise<User[]> {
-  const response = await fetch(`${API_BASE_URL}/chats/users`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch users');
-  }
-  return response.json();
 }

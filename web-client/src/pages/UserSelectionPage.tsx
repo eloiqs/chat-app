@@ -69,12 +69,12 @@ export function UserSelectionPage() {
                   </div>
                   <div>
                     <p className="font-semibold">{user.name}</p>
-                    <p className="text-sm text-muted-foreground">ID: {user.id}</p>
+                    <p className="text-sm text-muted-foreground">
+                      ID: {user.id}
+                    </p>
                   </div>
                 </div>
-                <Button onClick={() => handleSelectUser(user)}>
-                  Select
-                </Button>
+                <Button onClick={() => handleSelectUser(user)}>Select</Button>
               </div>
             </Card>
           ))}

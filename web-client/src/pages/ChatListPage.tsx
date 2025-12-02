@@ -1,14 +1,20 @@
-import { Suspense, use } from 'react';
+import { Suspense } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ChatListItem } from '@/components/chat/ChatListItem';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Chat } from 'shared';
 import { LogOut } from 'lucide-react';
 import { ErrorBoundary } from 'react-error-boundary';
+import { useSuspenseQuery } from '@tanstack/react-query';
 
-function ChatList({ chatsPromise }: { chatsPromise: Promise<Chat[]> }) {
-  const chats = use(chatsPromise);
+function ChatList() {
+  const { chatApi } = useAuth();
+
+  const { data: chats } = useSuspenseQuery({
+    queryKey: ['chats'],
+    queryFn: () => chatApi.getAllChats(),
+    networkMode: 'always',
+  });
 
   return (
     <>
@@ -44,9 +50,7 @@ ChatList.Error = () => {
 };
 
 export function ChatListPage() {
-  const { currentUser, logout, chatApi } = useAuth();
-
-  const chats = chatApi.getAllChats();
+  const { currentUser, logout } = useAuth();
 
   return (
     <AppLayout title="Chats">
@@ -69,7 +73,7 @@ export function ChatListPage() {
         </div>
         <ErrorBoundary fallback={<ChatList.Error />}>
           <Suspense fallback={<ChatList.Loading />}>
-            <ChatList chatsPromise={chats} />
+            <ChatList />
           </Suspense>
         </ErrorBoundary>
       </div>

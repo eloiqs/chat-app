@@ -4,24 +4,21 @@ import { Button } from '@/components/ui/button';
 import { Send } from 'lucide-react';
 
 interface MessageInputProps {
-  sendMessageAction: (content: string) => Promise<void>;
+  sendMessageAction: (content: string) => void;
+  sendMessagePending: boolean;
 }
 
-export function MessageInput({ sendMessageAction }: MessageInputProps) {
+export function MessageInput({
+  sendMessageAction,
+  sendMessagePending,
+}: MessageInputProps) {
   const formRef = useRef<HTMLFormElement>(null);
-
-  const [sending, setSending] = useOptimistic(
-    false,
-    (_state, next: boolean) => next,
-  );
 
   const submitAction = async (formData: FormData) => {
     const message = formData.get('message');
     if (message && typeof message === 'string' && message.trim()) {
       formRef.current?.reset();
-      setSending(true);
-      await sendMessageAction(message);
-      setSending(false);
+      sendMessageAction(message);
     }
   };
 
@@ -33,7 +30,7 @@ export function MessageInput({ sendMessageAction }: MessageInputProps) {
         placeholder="Type a message..."
         className="flex-1"
       />
-      <Button type="submit" size="icon" disabled={sending}>
+      <Button type="submit" size="icon" disabled={sendMessagePending}>
         <Send className="h-4 w-4" />
       </Button>
     </form>

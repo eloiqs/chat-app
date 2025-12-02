@@ -1,133 +1,169 @@
-import {
-  useEffect,
-  use,
-  useOptimistic,
-  Suspense,
-  type ReactNode,
-  useState,
-  startTransition,
-  useRef,
-  useLayoutEffect,
-} from 'react';
-import { useParams, Link } from 'react-router-dom';
-import type { Chat, Message } from 'shared';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { MessageBubble } from '@/components/chat/MessageBubble';
-import { MessageInput } from '@/components/chat/MessageInput';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Card } from '@/components/ui/card';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ErrorBoundary, useError } from '@/components/error-boundary';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useAuth } from '@/contexts/AuthContext';
 import type { OptimisticMessage } from '@/types/types';
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from '@tanstack/react-query';
+import { Send } from 'lucide-react';
+import {
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type ReactNode,
+} from 'react';
+import { useParams } from 'react-router-dom';
 
-function ChatDetailLayout({
-  children,
-  title,
-}: {
-  children: ReactNode;
-  title: ReactNode;
-}) {
+function ChatDetailLayout({ children }: { children: ReactNode }) {
   return (
-    <AppLayout title={title}>
+    <AppLayout title="Chat">
       <div className="max-w-2xl mx-auto h-[calc(100vh-180px)] flex flex-col">
-        <div className="mb-4">
-          <Link to="/">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Chats
-            </Button>
-          </Link>
-        </div>
-
         {children}
       </div>
     </AppLayout>
   );
 }
 
-function ChatDetailTitle({ chatPromise }: { chatPromise: Promise<Chat> }) {
-  const chat = use(chatPromise);
-  const isGroupChat = chat.participants.length > 1;
-  const participantNames = chat.participants.map((p) => p.name).join(', ');
-  const displayTitle = isGroupChat && chat.name ? chat.name : participantNames;
-
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex -space-x-2">
-        {chat.participants.slice(0, 3).map((participant) => (
-          <Avatar
-            key={participant.id}
-            className="border-2 border-background h-10 w-10"
-          >
-            <AvatarFallback>
-              {participant.avatar || participant.name.slice(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-        ))}
-        {chat.participants.length > 3 && (
-          <div className="w-10 h-10 rounded-full bg-muted border-2 border-background flex items-center justify-center text-xs font-medium">
-            +{chat.participants.length - 3}
-          </div>
-        )}
-      </div>
-      <div className="flex flex-col min-w-0">
-        <h1 className="text-2xl font-bold truncate">{displayTitle}</h1>
-        {isGroupChat && chat.name && (
-          <p className="text-sm text-muted-foreground truncate">
-            {participantNames}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ChatDetailTitleUnknown() {
-  return (
-    <div className="h-10 flex items-center">
-      <h1 className="text-2xl font-bold truncate">Chat</h1>
-    </div>
-  );
-}
-
-ChatDetailTitle.Loading = ChatDetailTitleUnknown;
-ChatDetailTitle.Error = ChatDetailTitleUnknown;
-
-function ChatBox({
-  chatPromise,
-  messagesPromise,
-  onMessageSent,
+export function MessageInput({
+  onSendMessage,
+  sendMessagePending,
 }: {
-  chatPromise: Promise<Chat>;
-  messagesPromise: Promise<Message[]>;
-  onMessageSent: () => void;
+  onSendMessage: (content: string) => void;
+  sendMessagePending: boolean;
 }) {
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const message = (event.target as HTMLFormElement).message.value;
+    if (message && typeof message === 'string' && message.trim()) {
+      formRef.current?.reset();
+      onSendMessage(message);
+    }
+  };
+
+  return (
+    <form onSubmit={onSubmit} className="flex gap-2" ref={formRef}>
+      <Input
+        type="text"
+        name="message"
+        placeholder="Type a message..."
+        className="flex-1"
+      />
+      <Button type="submit" size="icon" disabled={sendMessagePending}>
+        <Send className="h-4 w-4" />
+      </Button>
+    </form>
+  );
+}
+
+function ChatBox() {
   const { chatId } = useParams<{ chatId: string }>();
   const { currentUser, chatApi } = useAuth();
+  const queryClient = useQueryClient();
   const viewportRef = useRef<HTMLDivElement>(null);
-  const chat = use(chatPromise);
-  const messages = use(messagesPromise);
 
-  const [clientMessages, setClientMessages] =
-    useState<OptimisticMessage[]>(messages);
+  const { data: chat } = useSuspenseQuery({
+    queryKey: ['chat', chatId],
+    queryFn: () => chatApi.getChatById(chatId!),
+    networkMode: 'always',
+  });
 
-  useEffect(() => {
-    setClientMessages((prevMessages) => {
-      // Preserve any failed messages from the previous state
-      const failedMessages = prevMessages.filter((m) => m.error);
-      return [...messages, ...failedMessages];
-    });
-  }, [messages]);
+  const { data: messages } = useSuspenseQuery({
+    queryKey: ['chatMessages', chatId],
+    queryFn: () =>
+      chatApi.getChatMessages(chatId!) as Promise<OptimisticMessage[]>,
+    networkMode: 'always',
+  });
 
-  const [optimisticMessages, addOptimisticMessage] = useOptimistic(
-    clientMessages,
-    (state, message: Message) => {
-      return state.concat(message);
+  const { mutate: sendMessage, isPending: sendMessagePending } = useMutation({
+    mutationFn: async (content: string) => {
+      return chatApi.sendMessage(chatId!, content);
     },
-  );
+    onMutate: async (content: string) => {
+      // Cancel outgoing refetches so they don't overwrite our optimistic update
+      await queryClient.cancelQueries({
+        queryKey: ['chatMessages', chatId],
+      });
+
+      // Snapshot the previous messages
+      const previousMessages =
+        queryClient.getQueryData<OptimisticMessage[]>([
+          'chatMessages',
+          chatId,
+        ]) || [];
+
+      // Separate successful and failed messages
+      const successfulMessages = previousMessages.filter((m) => !m.error);
+      const failedMessages = previousMessages.filter((m) => m.error);
+
+      // Create optimistic message
+      const optimisticMessage: OptimisticMessage = {
+        id: `optimistic-${Date.now()}`,
+        chatId: chat.id,
+        content,
+        sender: currentUser!,
+        timestamp: new Date().toISOString(),
+        isCurrentUser: true,
+        sending: true,
+      };
+
+      // Optimistically update the cache with failed messages at the bottom
+      queryClient.setQueryData<OptimisticMessage[]>(
+        ['chatMessages', chatId],
+        [...successfulMessages, optimisticMessage, ...failedMessages],
+      );
+
+      // Return context with previous messages and optimistic message
+      return { previousMessages, optimisticMessage };
+    },
+    onSuccess: (newMessage, _variables, context) => {
+      // Replace the optimistic message with the real one, keeping failed messages at bottom
+      queryClient.setQueryData<OptimisticMessage[]>(
+        ['chatMessages', chatId],
+        (old = []) => {
+          const successfulMessages = old.filter(
+            (m) => !m.error && m.id !== context?.optimisticMessage.id,
+          );
+          const failedMessages = old.filter((m) => m.error);
+          return [...successfulMessages, newMessage, ...failedMessages];
+        },
+      );
+    },
+    onError: (_error, _variables, context) => {
+      // Rollback to previous messages
+      if (context?.previousMessages) {
+        queryClient.setQueryData(
+          ['chatMessages', chatId],
+          context.previousMessages,
+        );
+      }
+
+      // Add the failed message back with error flag at the bottom
+      const failedMessage: OptimisticMessage = {
+        ...context!.optimisticMessage,
+        error: true,
+        sending: false,
+      };
+
+      queryClient.setQueryData<OptimisticMessage[]>(
+        ['chatMessages', chatId],
+        (old = []) => {
+          const successfulMessages = old.filter((m) => !m.error);
+          const failedMessages = old.filter((m) => m.error);
+          return [...successfulMessages, ...failedMessages, failedMessage];
+        },
+      );
+    },
+  });
 
   useEffect(() => {
     chatApi.markChatAsRead(chatId!);
@@ -138,52 +174,28 @@ function ChatBox({
       behavior: 'instant',
       top: viewportRef.current.scrollHeight,
     });
-  }, [optimisticMessages.length]);
+  }, [messages?.length]);
 
-  const sendMessageAction = async (content: string) => {
+  const onSendMessage = (content: string) => {
     if (!chatId) return;
-
-    const timestamp = new Date().toISOString();
-    const optimisticMessage: OptimisticMessage = {
-      id: `optimistic-${timestamp}`,
-      chatId: chat.id,
-      content: content,
-      sender: currentUser!,
-      timestamp,
-      isCurrentUser: true,
-      sending: true,
-    };
-    addOptimisticMessage(optimisticMessage);
-
-    try {
-      await chatApi.sendMessage(chatId, content);
-      startTransition(() => {
-        onMessageSent();
-      });
-    } catch {
-      // persist the optimistic message in error state on the client to allow retries
-      startTransition(() => {
-        setClientMessages((state) =>
-          state.concat({ ...optimisticMessage, error: true, sending: false }),
-        );
-      });
-    }
+    sendMessage(content);
   };
 
   const retryMessage = (messageId: string, content: string) => {
-    // Remove the failed message from clientMessages
-    setClientMessages((state) => state.filter((m) => m.id !== messageId));
+    // Remove the failed message from cache
+    queryClient.setQueryData<OptimisticMessage[]>(
+      ['chatMessages', chatId],
+      (old = []) => old.filter((m) => m.id !== messageId),
+    );
 
     // Retry sending the message
-    startTransition(async () => {
-      await sendMessageAction(content);
-    });
+    sendMessage(content);
   };
 
   return (
     <Card className="flex-1 flex flex-col overflow-hidden">
       <ScrollArea className="flex-1 p-4" viewportRef={viewportRef}>
-        {optimisticMessages.map((message) => (
+        {messages.map((message) => (
           <MessageBubble
             key={message.id}
             message={message}
@@ -191,7 +203,7 @@ function ChatBox({
           />
         ))}
 
-        {optimisticMessages.length === 0 && (
+        {messages.length === 0 && (
           <div className="text-center text-muted-foreground py-12">
             <p>No messages yet. Start the conversation!</p>
           </div>
@@ -199,7 +211,10 @@ function ChatBox({
       </ScrollArea>
 
       <div className="border-t p-4">
-        <MessageInput sendMessageAction={sendMessageAction} />
+        <MessageInput
+          onSendMessage={onSendMessage}
+          sendMessagePending={sendMessagePending}
+        />
       </div>
     </Card>
   );
@@ -229,34 +244,11 @@ ChatBox.Error = function ChatBoxError() {
 };
 
 export function ChatDetailPage() {
-  const { chatId } = useParams<{ chatId: string }>();
-  const { chatApi } = useAuth();
-
-  const chatPromise = chatApi.getChatById(chatId!);
-  const [messagesPromise, setMessagesPromise] = useState(() =>
-    chatApi.getChatMessages(chatId!),
-  );
-
-  const refetchMessages = () =>
-    setMessagesPromise(chatApi.getChatMessages(chatId!).catch());
-
   return (
-    <ChatDetailLayout
-      title={
-        <ErrorBoundary fallback={<ChatDetailTitle.Error />}>
-          <Suspense fallback={<ChatDetailTitle.Loading />}>
-            <ChatDetailTitle chatPromise={chatPromise} />
-          </Suspense>
-        </ErrorBoundary>
-      }
-    >
+    <ChatDetailLayout>
       <ErrorBoundary fallback={<ChatBox.Error />}>
         <Suspense fallback={<ChatBox.Loading />}>
-          <ChatBox
-            chatPromise={chatPromise}
-            messagesPromise={messagesPromise}
-            onMessageSent={refetchMessages}
-          />
+          <ChatBox />
         </Suspense>
       </ErrorBoundary>
     </ChatDetailLayout>

@@ -1,4 +1,10 @@
-import { createContext, useContext, useState, type ReactNode, useMemo } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  type ReactNode,
+  useMemo,
+} from 'react';
 import type { User } from 'shared';
 import { createChatApi, type ChatApiClient } from '@/api/client';
 
@@ -41,10 +47,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(STORAGE_KEY);
   };
 
-  const chatApi = useMemo(() => createChatApi(currentUser?.id || null), [currentUser?.id]);
+  const chatApi = useMemo(
+    () => createChatApi(currentUser?.id || null),
+    [currentUser?.id],
+  );
 
   return (
-    <AuthContext.Provider value={{ currentUser, login, logout, isLoading, chatApi }}>
+    <AuthContext.Provider
+      value={{ currentUser, login, logout, isLoading, chatApi }}
+    >
       {children}
     </AuthContext.Provider>
   );

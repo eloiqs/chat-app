@@ -4,6 +4,7 @@ import { ChatDetailPage } from '@/pages/ChatDetailPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { UserSelectionPage } from '@/pages/UserSelectionPage';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 function AppRoutes() {
   const { currentUser, isLoading } = useAuth();
@@ -29,11 +30,15 @@ function AppRoutes() {
   );
 }
 
+const queryClient = new QueryClient();
+
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <QueryClientProvider client={queryClient}>
+          <AppRoutes />
+        </QueryClientProvider>
       </AuthProvider>
     </BrowserRouter>
   );

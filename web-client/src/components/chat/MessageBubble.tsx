@@ -1,6 +1,5 @@
 import { cn } from '@/lib/utils';
-import { RotateCw, Loader2, AlertCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Loader2, AlertCircle } from 'lucide-react';
 import type { OptimisticMessage } from '@/types/types';
 
 export function MessageBubble({
