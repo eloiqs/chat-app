@@ -35,6 +35,11 @@ export function ChatDetailPage() {
         ]);
         setChat(chatData);
         setMessages(messages);
+
+        // Mark all messages in this chat as read (fire and forget, ignore errors)
+        chatApi.markChatAsRead(chatId).catch(() => {
+          // Silently ignore errors
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load chat');
       } finally {

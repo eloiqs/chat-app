@@ -7,6 +7,7 @@ export interface ChatApiClient {
   getChatById(id: string): Promise<Chat>;
   getChatMessages(id: string): Promise<Message[]>;
   sendMessage(chatId: string, content: string): Promise<Message>;
+  markChatAsRead(chatId: string): Promise<void>;
 }
 
 export function createChatApi(userId: string | null): ChatApiClient {
@@ -61,6 +62,16 @@ export function createChatApi(userId: string | null): ChatApiClient {
         throw new Error('Failed to send message');
       }
       return response.json();
+    },
+
+    async markChatAsRead(chatId: string): Promise<void> {
+      const response = await fetch(`${API_BASE_URL}/chats/${chatId}/read`, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to mark chat as read');
+      }
     },
   };
 }

@@ -76,4 +76,20 @@ export class ChatController {
     }
     return message;
   }
+
+  @Post(':id/read')
+  markChatAsRead(
+    @Param('id') id: string,
+    @Headers('x-user-id') userId: string,
+  ): { success: boolean } {
+    if (!userId) {
+      throw new UnauthorizedException('User ID is required');
+    }
+
+    const success = this.chatService.markChatAsRead(id, userId);
+    if (!success) {
+      throw new NotFoundException('Chat not found');
+    }
+    return { success: true };
+  }
 }

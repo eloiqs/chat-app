@@ -20,7 +20,12 @@ export interface Chat {
   name?: string;
   participantIds: string[];
   lastMessage?: Message;
-  unreadCount?: number;
+}
+
+export interface MessageView {
+  userId: string;
+  messageId: string;
+  viewedAt: string;
 }
 
 @Injectable()
@@ -155,41 +160,75 @@ export class ChatService {
       id: 'c1',
       name: 'Alice Johnson',
       participantIds: ['u1', 'u2'],
-      unreadCount: 0,
     },
     {
       id: 'c2',
       name: 'Bob Smith',
       participantIds: ['u1', 'u3'],
-      unreadCount: 2,
     },
     {
       id: 'c3',
       name: 'Charlie Davis',
       participantIds: ['u1', 'u4'],
-      unreadCount: 0,
     },
     {
       id: 'c4',
       name: 'Diana Wilson',
       participantIds: ['u2', 'u5'],
-      unreadCount: 1,
     },
     {
       id: 'c5',
       name: 'Team Chat',
       participantIds: ['u1', 'u2', 'u3'],
-      unreadCount: 0,
     },
     {
       id: 'c6',
       participantIds: ['u1', 'u2', 'u3'],
-      unreadCount: 0,
     },
+  ];
+
+  // Track which messages have been viewed by which users
+  private messageViews: MessageView[] = [
+    // Example: u1 has viewed some messages in c1
+    { userId: 'u1', messageId: 'm1', viewedAt: '2025-12-01T09:01:00Z' },
+    { userId: 'u1', messageId: 'm2', viewedAt: '2025-12-01T09:06:00Z' },
+    { userId: 'u1', messageId: 'm3', viewedAt: '2025-12-01T09:11:00Z' },
+    { userId: 'u1', messageId: 'm4', viewedAt: '2025-12-01T09:16:00Z' },
+    // u1 has only viewed first message in c2
+    { userId: 'u1', messageId: 'm5', viewedAt: '2025-12-01T08:31:00Z' },
+    // u1 has viewed all messages in c3
+    { userId: 'u1', messageId: 'm8', viewedAt: '2025-11-30T16:21:00Z' },
+    { userId: 'u1', messageId: 'm9', viewedAt: '2025-11-30T16:26:00Z' },
   ];
 
   getAllUsers(): User[] {
     return this.users;
+  }
+
+  /**
+   * Compute the unread message count for a specific user in a specific chat.
+   * A message is unread if:
+   * 1. It was not sent by the user
+   * 2. There is no MessageView record for this user and message
+   */
+  private computeUnreadCount(chatId: string, userId: string): number {
+    const chatMessages = this.messages.filter((m) => m.chatId === chatId);
+
+    const unreadMessages = chatMessages.filter((message) => {
+      // Don't count messages sent by the user
+      if (message.senderId === userId) {
+        return false;
+      }
+
+      // Check if user has viewed this message
+      const hasViewed = this.messageViews.some(
+        (view) => view.userId === userId && view.messageId === message.id,
+      );
+
+      return !hasViewed;
+    });
+
+    return unreadMessages.length;
   }
 
   private getParticipants(participantIds: string[]): User[] {
@@ -227,7 +266,7 @@ export class ChatService {
         chat.participantIds.filter((id) => id !== userId),
       ),
       lastMessage: this.getLastMessage(chat.id, chat.participantIds[0]),
-      unreadCount: chat.unreadCount,
+      unreadCount: this.computeUnreadCount(chat.id, userId),
     } satisfies Shared.Chat;
   }
 
@@ -295,5 +334,41 @@ export class ChatService {
     this.messages.push(newMessage);
 
     return this.toSharedMessage(senderId, newMessage);
+  }
+
+  /**
+   * Mark all messages in a chat as read for a specific user.
+   * Creates MessageView records for any unread messages.
+   */
+  markChatAsRead(chatId: string, userId: string): boolean {
+    const chat = this.chats.find((chat) => chat.id === chatId);
+    if (!chat || !chat.participantIds.includes(userId)) {
+      return false;
+    }
+
+    const chatMessages = this.messages.filter((m) => m.chatId === chatId);
+    const now = new Date().toISOString();
+
+    chatMessages.forEach((message) => {
+      // Skip messages sent by the user
+      if (message.senderId === userId) {
+        return;
+      }
+
+      // Check if already viewed
+      const alreadyViewed = this.messageViews.some(
+        (view) => view.userId === userId && view.messageId === message.id,
+      );
+
+      if (!alreadyViewed) {
+        this.messageViews.push({
+          userId,
+          messageId: message.id,
+          viewedAt: now,
+        });
+      }
+    });
+
+    return true;
   }
 }
