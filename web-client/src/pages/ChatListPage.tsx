@@ -1,31 +1,52 @@
-import { useEffect, useState } from 'react';
-import type { Chat } from 'shared';
+import { Suspense, use } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ChatListItem } from '@/components/chat/ChatListItem';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import type { Chat } from 'shared';
 import { LogOut } from 'lucide-react';
+import { ErrorBoundary } from 'react-error-boundary';
+
+function ChatList({ chatsPromise }: { chatsPromise: Promise<Chat[]> }) {
+  const chats = use(chatsPromise);
+
+  return (
+    <>
+      <div className="space-y-3">
+        {chats.map((chat) => (
+          <ChatListItem key={chat.id} chat={chat} />
+        ))}
+      </div>
+
+      {chats.length === 0 && (
+        <div className="text-center text-muted-foreground py-12">
+          <p>No chats yet</p>
+        </div>
+      )}
+    </>
+  );
+}
+
+ChatList.Loading = () => {
+  return (
+    <div className="text-center text-muted-foreground py-12">
+      <p>Loading chats...</p>
+    </div>
+  );
+};
+
+ChatList.Error = () => {
+  return (
+    <div className="text-center text-destructive py-12">
+      <p>Something went wrong</p>
+    </div>
+  );
+};
 
 export function ChatListPage() {
   const { currentUser, logout, chatApi } = useAuth();
-  const [chats, setChats] = useState<Chat[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchChats = async () => {
-      try {
-        const data = await chatApi.getAllChats();
-        setChats(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load chats');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchChats();
-  }, [chatApi]);
+  const chats = chatApi.getAllChats();
 
   return (
     <AppLayout title="Chats">
@@ -33,7 +54,8 @@ export function ChatListPage() {
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
-              {currentUser?.avatar || currentUser?.name.slice(0, 2).toUpperCase()}
+              {currentUser?.avatar ||
+                currentUser?.name.slice(0, 2).toUpperCase()}
             </div>
             <div>
               <p className="font-semibold">{currentUser?.name}</p>
@@ -45,33 +67,11 @@ export function ChatListPage() {
             Logout
           </Button>
         </div>
-        {loading && (
-          <div className="text-center text-muted-foreground py-12">
-            <p>Loading chats...</p>
-          </div>
-        )}
-
-        {error && (
-          <div className="text-center text-destructive py-12">
-            <p>{error}</p>
-          </div>
-        )}
-
-        {!loading && !error && (
-          <>
-            <div className="space-y-3">
-              {chats.map((chat) => (
-                <ChatListItem key={chat.id} chat={chat} />
-              ))}
-            </div>
-
-            {chats.length === 0 && (
-              <div className="text-center text-muted-foreground py-12">
-                <p>No chats yet</p>
-              </div>
-            )}
-          </>
-        )}
+        <ErrorBoundary fallback={<ChatList.Error />}>
+          <Suspense fallback={<ChatList.Loading />}>
+            <ChatList chatsPromise={chats} />
+          </Suspense>
+        </ErrorBoundary>
       </div>
     </AppLayout>
   );
