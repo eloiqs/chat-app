@@ -158,22 +158,18 @@ export class ChatService {
   private chats: Chat[] = [
     {
       id: 'c1',
-      name: 'Alice Johnson',
       participantIds: ['u1', 'u2'],
     },
     {
       id: 'c2',
-      name: 'Bob Smith',
       participantIds: ['u1', 'u3'],
     },
     {
       id: 'c3',
-      name: 'Charlie Davis',
       participantIds: ['u1', 'u4'],
     },
     {
       id: 'c4',
-      name: 'Diana Wilson',
       participantIds: ['u2', 'u5'],
     },
     {

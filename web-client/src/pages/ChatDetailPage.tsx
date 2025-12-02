@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 export function ChatDetailPage() {
   const { chatId } = useParams<{ chatId: string }>();
@@ -86,8 +87,43 @@ export function ChatDetailPage() {
     }
   };
 
+  const isGroupChat = chat.participants.length > 1;
+  const participantNames = chat.participants.map((p) => p.name).join(', ');
+  const displayTitle = isGroupChat && chat.name ? chat.name : participantNames;
+
+  const chatTitle = (
+    <div className="flex items-center gap-3">
+      <div className="flex -space-x-2">
+        {chat.participants.slice(0, 3).map((participant) => (
+          <Avatar
+            key={participant.id}
+            className="border-2 border-background h-10 w-10"
+          >
+            <AvatarFallback>
+              {participant.avatar ||
+                participant.name.slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+        ))}
+        {chat.participants.length > 3 && (
+          <div className="w-10 h-10 rounded-full bg-muted border-2 border-background flex items-center justify-center text-xs font-medium">
+            +{chat.participants.length - 3}
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col min-w-0">
+        <h1 className="text-2xl font-bold truncate">{displayTitle}</h1>
+        {isGroupChat && chat.name && (
+          <p className="text-sm text-muted-foreground truncate">
+            {participantNames}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+
   return (
-    <AppLayout title={chat.name}>
+    <AppLayout title={chatTitle}>
       <div className="max-w-2xl mx-auto h-[calc(100vh-180px)] flex flex-col">
         <div className="mb-4">
           <Link to="/">
