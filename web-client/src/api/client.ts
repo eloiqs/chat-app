@@ -1,6 +1,6 @@
 import type { Chat, Message, User } from 'shared';
 
-const API_BASE_URL = 'http://localhost:3000/api';
+const API_BASE_URL = 'http://' + window.location.hostname + ':3000/api';
 
 export interface ChatApiClient {
   getAllChats(): Promise<Chat[]>;

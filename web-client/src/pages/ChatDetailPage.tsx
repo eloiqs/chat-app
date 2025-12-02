@@ -8,9 +8,7 @@ import {
   startTransition,
   useRef,
   useLayoutEffect,
-  useMemo,
 } from 'react';
-import debounce from 'lodash.debounce';
 import { useParams, Link } from 'react-router-dom';
 import type { Chat, Message } from 'shared';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -23,6 +21,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ErrorBoundary, useError } from '@/components/error-boundary';
+import type { OptimisticMessage } from '@/types/types';
 
 function ChatDetailLayout({
   children,
@@ -112,10 +111,21 @@ function ChatBox({
   const chat = use(chatPromise);
   const messages = use(messagesPromise);
 
+  const [clientMessages, setClientMessages] =
+    useState<OptimisticMessage[]>(messages);
+
+  useEffect(() => {
+    setClientMessages((prevMessages) => {
+      // Preserve any failed messages from the previous state
+      const failedMessages = prevMessages.filter((m) => m.error);
+      return [...messages, ...failedMessages];
+    });
+  }, [messages]);
+
   const [optimisticMessages, addOptimisticMessage] = useOptimistic(
-    messages,
-    (state, optimisticMessage: Message) => {
-      return state.concat(optimisticMessage);
+    clientMessages,
+    (state, message: Message) => {
+      return state.concat(message);
     },
   );
 
@@ -134,20 +144,39 @@ function ChatBox({
     if (!chatId) return;
 
     const timestamp = new Date().toISOString();
-    const optimisticMessage: Message = {
+    const optimisticMessage: OptimisticMessage = {
       id: `optimistic-${timestamp}`,
       chatId: chat.id,
-      content,
+      content: content,
       sender: currentUser!,
       timestamp,
       isCurrentUser: true,
+      sending: true,
     };
-
     addOptimisticMessage(optimisticMessage);
 
-    await chatApi.sendMessage(chatId, content);
-    startTransition(() => {
-      onMessageSent();
+    try {
+      await chatApi.sendMessage(chatId, content);
+      startTransition(() => {
+        onMessageSent();
+      });
+    } catch {
+      // persist the optimistic message in error state on the client to allow retries
+      startTransition(() => {
+        setClientMessages((state) =>
+          state.concat({ ...optimisticMessage, error: true, sending: false }),
+        );
+      });
+    }
+  };
+
+  const retryMessage = (messageId: string, content: string) => {
+    // Remove the failed message from clientMessages
+    setClientMessages((state) => state.filter((m) => m.id !== messageId));
+
+    // Retry sending the message
+    startTransition(async () => {
+      await sendMessageAction(content);
     });
   };
 
@@ -155,7 +184,11 @@ function ChatBox({
     <Card className="flex-1 flex flex-col overflow-hidden">
       <ScrollArea className="flex-1 p-4" viewportRef={viewportRef}>
         {optimisticMessages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
+          <MessageBubble
+            key={message.id}
+            message={message}
+            onRetry={message.error ? retryMessage : undefined}
+          />
         ))}
 
         {optimisticMessages.length === 0 && (
@@ -204,12 +237,8 @@ export function ChatDetailPage() {
     chatApi.getChatMessages(chatId!),
   );
 
-  const refetchMessages = useMemo(
-    () => () => {
-      setMessagesPromise(chatApi.getChatMessages(chatId!));
-    },
-    [chatId, chatApi],
-  );
+  const refetchMessages = () =>
+    setMessagesPromise(chatApi.getChatMessages(chatId!).catch());
 
   return (
     <ChatDetailLayout
