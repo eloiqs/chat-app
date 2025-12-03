@@ -12,10 +12,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 interface UserContextType {
   currentUser: User;
-  chatApi: ChatApiClient;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
+
+interface ChatApiContextType {
+  chatApi: ChatApiClient;
+}
+
+const ChatApiContext = createContext<ChatApiContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'chat-app-user';
 
@@ -34,9 +39,7 @@ function getStoredUser(): User | null {
 
 function UserProvider({ children, user }: { children: ReactNode; user: User }) {
   return (
-    <UserContext.Provider
-      value={{ currentUser: user, chatApi: createChatApi(user.id) }}
-    >
+    <UserContext.Provider value={{ currentUser: user }}>
       {children}
     </UserContext.Provider>
   );
@@ -46,6 +49,25 @@ export function useAuthUser() {
   const context = useContext(UserContext);
   if (context === undefined) {
     throw new Error('useAuthUser must be used within an UserProvider');
+  }
+  return context;
+}
+
+function ChatApiProvider({ children }: { children: ReactNode }) {
+  const { currentUser } = useAuthUser();
+  const chatApi = createChatApi(currentUser.id);
+
+  return (
+    <ChatApiContext.Provider value={{ chatApi }}>
+      {children}
+    </ChatApiContext.Provider>
+  );
+}
+
+export function useChatApi() {
+  const context = useContext(ChatApiContext);
+  if (context === undefined) {
+    throw new Error('useChatApi must be used within a ChatApiProvider');
   }
   return context;
 }
@@ -66,7 +88,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{ login, logout, currentUser }}>
       {currentUser ? (
-        <UserProvider user={currentUser}>{children}</UserProvider>
+        <UserProvider user={currentUser}>
+          <ChatApiProvider>{children}</ChatApiProvider>
+        </UserProvider>
       ) : (
         children
       )}
