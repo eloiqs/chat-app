@@ -1,12 +1,15 @@
 import { MessageBubble } from '@/components/chat/MessageBubble';
+import { TypingIndicator } from '@/components/chat/TypingIndicator';
 import { ErrorBoundary, useError } from '@/components/error-boundary';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthUser } from '@/contexts/AuthContext';
+import { useSocket } from '@/contexts/SocketContext';
 import type { OptimisticMessage } from '@/types/types';
+import type { Message } from 'shared';
 import {
   useMutation,
   useQueryClient,
@@ -18,9 +21,20 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
   type ReactNode,
 } from 'react';
 import { useParams } from 'react-router-dom';
+
+function toOptimisticMessage(
+  message: Message,
+  currentUserId: string,
+): OptimisticMessage {
+  return {
+    ...message,
+    isCurrentUser: message.sender.id === currentUserId,
+  };
+}
 
 function ChatDetailLayout({ children }: { children: ReactNode }) {
   return (
@@ -33,22 +47,59 @@ function ChatDetailLayout({ children }: { children: ReactNode }) {
 }
 
 export function MessageInput({
+  chatId,
   onSendMessage,
   sendMessagePending,
 }: {
+  chatId: string;
   onSendMessage: (content: string) => void;
   sendMessagePending: boolean;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { emitTyping } = useSocket();
+  const { currentUser } = useAuthUser();
+
+  const handleTyping = () => {
+    // Emit typing started
+    emitTyping(chatId, currentUser.id, true);
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Set timeout to emit typing stopped after 2 seconds of inactivity
+    typingTimeoutRef.current = setTimeout(() => {
+      emitTyping(chatId, currentUser.id, false);
+    }, 2000);
+  };
 
   const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const message = (event.target as HTMLFormElement).message.value;
     if (message && typeof message === 'string' && message.trim()) {
       formRef.current?.reset();
+
+      // Stop typing indicator immediately on send
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      emitTyping(chatId, currentUser.id, false);
+
       onSendMessage(message);
     }
   };
+
+  useEffect(() => {
+    return () => {
+      // Cleanup: stop typing indicator on unmount
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      emitTyping(chatId, currentUser.id, false);
+    };
+  }, [chatId, currentUser.id, emitTyping]);
 
   return (
     <form onSubmit={onSubmit} className="flex gap-2" ref={formRef}>
@@ -57,6 +108,7 @@ export function MessageInput({
         name="message"
         placeholder="Type a message..."
         className="flex-1"
+        onChange={handleTyping}
       />
       <Button type="submit" size="icon" disabled={sendMessagePending}>
         <Send className="h-4 w-4" />
@@ -67,9 +119,13 @@ export function MessageInput({
 
 function ChatBox() {
   const { chatId } = useParams<{ chatId: string }>();
-  const { currentUser, chatApi } = useAuth();
+  const { currentUser, chatApi } = useAuthUser();
   const queryClient = useQueryClient();
   const viewportRef = useRef<HTMLDivElement>(null);
+  const { joinChat, leaveChat, onUserTyping, onNewMessage } = useSocket();
+  const [typingUsers, setTypingUsers] = useState<Map<string, string>>(
+    new Map(),
+  );
 
   const { data: chat } = useSuspenseQuery({
     queryKey: ['chat', chatId],
@@ -79,8 +135,10 @@ function ChatBox() {
 
   const { data: messages } = useSuspenseQuery({
     queryKey: ['chatMessages', chatId],
-    queryFn: () =>
-      chatApi.getChatMessages(chatId!) as Promise<OptimisticMessage[]>,
+    queryFn: async () => {
+      const msgs = await chatApi.getChatMessages(chatId!);
+      return msgs.map((m) => toOptimisticMessage(m, currentUser.id));
+    },
     networkMode: 'always',
   });
 
@@ -110,7 +168,7 @@ function ChatBox() {
         id: `optimistic-${Date.now()}`,
         chatId: chat.id,
         content,
-        sender: currentUser!,
+        sender: currentUser,
         timestamp: new Date().toISOString(),
         isCurrentUser: true,
         sending: true,
@@ -134,7 +192,11 @@ function ChatBox() {
             (m) => !m.error && m.id !== context?.optimisticMessage.id,
           );
           const failedMessages = old.filter((m) => m.error);
-          return [...successfulMessages, newMessage, ...failedMessages];
+          return [
+            ...successfulMessages,
+            toOptimisticMessage(newMessage, currentUser.id),
+            ...failedMessages,
+          ];
         },
       );
     },
@@ -165,6 +227,62 @@ function ChatBox() {
     },
   });
 
+  // Join chat room and listen for real-time events
+  useEffect(() => {
+    if (!chatId) return;
+
+    joinChat(chatId);
+
+    // Listen for typing indicators
+    const unsubscribeTyping = onUserTyping((data) => {
+      if (data.chatId !== chatId || data.userId === currentUser.id) return;
+
+      setTypingUsers((prev) => {
+        const next = new Map(prev);
+        if (data.isTyping) {
+          next.set(data.userId, data.userName);
+        } else {
+          next.delete(data.userId);
+        }
+        return next;
+      });
+    });
+
+    // Listen for new messages
+    const unsubscribeNewMessage = onNewMessage((data) => {
+      if (data.chatId !== chatId) return;
+
+      // Skip messages from the current user (already handled by optimistic updates)
+      if (data.message.sender.id === currentUser.id) return;
+
+      // Update the messages in the query cache
+      queryClient.setQueryData<OptimisticMessage[]>(
+        ['chatMessages', chatId],
+        (old = []) => {
+          // Check if message already exists (avoid duplicates)
+          if (old.some((m) => m.id === data.message.id)) {
+            return old;
+          }
+          return [...old, toOptimisticMessage(data.message, currentUser.id)];
+        },
+      );
+    });
+
+    return () => {
+      leaveChat(chatId);
+      unsubscribeTyping();
+      unsubscribeNewMessage();
+    };
+  }, [
+    chatId,
+    currentUser.id,
+    joinChat,
+    leaveChat,
+    onUserTyping,
+    onNewMessage,
+    queryClient,
+  ]);
+
   useEffect(() => {
     chatApi.markChatAsRead(chatId!);
   }, [chatId, chatApi]);
@@ -174,7 +292,7 @@ function ChatBox() {
       behavior: 'instant',
       top: viewportRef.current.scrollHeight,
     });
-  }, [messages?.length]);
+  }, [messages?.length, typingUsers.size]);
 
   const onSendMessage = (content: string) => {
     if (!chatId) return;
@@ -208,10 +326,14 @@ function ChatBox() {
             <p>No messages yet. Start the conversation!</p>
           </div>
         )}
+
+        {/* Show typing indicator */}
+        <TypingIndicator userNames={Array.from(typingUsers.values())} />
       </ScrollArea>
 
       <div className="border-t p-4">
         <MessageInput
+          chatId={chatId!}
           onSendMessage={onSendMessage}
           sendMessagePending={sendMessagePending}
         />

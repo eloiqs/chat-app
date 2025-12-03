@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type * as Shared from 'shared';
+import type { ChatGateway } from './chat.gateway';
 
 export interface User {
   id: string;
@@ -30,6 +31,12 @@ export interface MessageView {
 
 @Injectable()
 export class ChatService {
+  private chatGateway?: ChatGateway;
+
+  setChatGateway(gateway: ChatGateway) {
+    this.chatGateway = gateway;
+  }
+
   private users: User[] = [
     { id: 'u1', name: 'John Doe', avatar: 'JD' },
     { id: 'u2', name: 'Alice Johnson', avatar: 'AJ' },
@@ -201,6 +208,10 @@ export class ChatService {
     return this.users;
   }
 
+  getUserById(id: string): User | undefined {
+    return this.users.find((user) => user.id === id);
+  }
+
   /**
    * Compute the unread message count for a specific user in a specific chat.
    * A message is unread if:
@@ -233,10 +244,7 @@ export class ChatService {
       .filter((user): user is User => user !== undefined);
   }
 
-  private getLastMessage(
-    chatId: string,
-    currentUserId: string,
-  ): Shared.Message | undefined {
+  private getLastMessage(chatId: string): Shared.Message | undefined {
     const chatMessages = this.messages
       .filter((m) => m.chatId === chatId)
       .sort(
@@ -250,7 +258,6 @@ export class ChatService {
     return {
       ...lastMessage,
       sender: this.users.find((u) => u.id === lastMessage.senderId),
-      isCurrentUser: lastMessage.senderId === currentUserId,
     };
   }
 
@@ -261,19 +268,18 @@ export class ChatService {
       participants: this.getParticipants(
         chat.participantIds.filter((id) => id !== userId),
       ),
-      lastMessage: this.getLastMessage(chat.id, chat.participantIds[0]),
+      lastMessage: this.getLastMessage(chat.id),
       unreadCount: this.computeUnreadCount(chat.id, userId),
     } satisfies Shared.Chat;
   }
 
-  private toSharedMessage(userId: string, message: Message) {
+  private toSharedMessage(message: Message) {
     return {
       id: message.id,
       chatId: message.chatId,
       content: message.content,
       timestamp: message.timestamp,
       sender: this.users.find((u) => u.id === message.senderId),
-      isCurrentUser: message.senderId === userId,
     } satisfies Shared.Message;
   }
 
@@ -302,7 +308,7 @@ export class ChatService {
 
     return this.messages
       .filter((m) => m.chatId === id)
-      .map((m) => this.toSharedMessage(userId, m))
+      .map((m) => this.toSharedMessage(m))
       .sort(
         (a, b) =>
           new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
@@ -329,7 +335,14 @@ export class ChatService {
 
     this.messages.push(newMessage);
 
-    return this.toSharedMessage(senderId, newMessage);
+    const sharedMessage = this.toSharedMessage(newMessage);
+
+    // Broadcast the new message to all users in the chat via WebSocket
+    if (this.chatGateway) {
+      this.chatGateway.broadcastNewMessage(chatId, sharedMessage);
+    }
+
+    return sharedMessage;
   }
 
   /**

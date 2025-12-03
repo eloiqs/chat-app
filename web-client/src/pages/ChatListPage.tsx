@@ -2,13 +2,13 @@ import { Suspense } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ChatListItem } from '@/components/chat/ChatListItem';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, useAuthUser } from '@/contexts/AuthContext';
 import { LogOut } from 'lucide-react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { useSuspenseQuery } from '@tanstack/react-query';
 
 function ChatList() {
-  const { chatApi } = useAuth();
+  const { chatApi } = useAuthUser();
 
   const { data: chats } = useSuspenseQuery({
     queryKey: ['chats'],
@@ -50,7 +50,8 @@ ChatList.Error = () => {
 };
 
 export function ChatListPage() {
-  const { currentUser, logout } = useAuth();
+  const { logout } = useAuth();
+  const { currentUser } = useAuthUser();
 
   return (
     <AppLayout title="Chats">
@@ -58,11 +59,10 @@ export function ChatListPage() {
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
-              {currentUser?.avatar ||
-                currentUser?.name.slice(0, 2).toUpperCase()}
+              {currentUser.avatar || currentUser.name.slice(0, 2).toUpperCase()}
             </div>
             <div>
-              <p className="font-semibold">{currentUser?.name}</p>
+              <p className="font-semibold">{currentUser.name}</p>
               <p className="text-sm text-muted-foreground">Logged in</p>
             </div>
           </div>

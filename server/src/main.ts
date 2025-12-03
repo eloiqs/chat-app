@@ -1,18 +1,23 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { ConfigService } from '@nestjs/config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
+
+  // Get CORS configuration from environment variables
+  const corsOrigins = configService.get<string>('CORS_ORIGINS', 'http://localhost:5173');
+  const corsCredentials = configService.get<string>('CORS_CREDENTIALS', 'true') === 'true';
 
   // Enable CORS for the web client
-  if (process.env.NODE_ENV !== 'production') {
-    app.enableCors({
-      origin: ['http://localhost:5173', 'http://proxyman.debug:5173'],
-      credentials: true,
-    });
-  }
+  app.enableCors({
+    origin: corsOrigins.split(',').map(origin => origin.trim()),
+    credentials: corsCredentials,
+  });
 
-  await app.listen(3000);
-  console.log(`Server is running on: http://localhost:3000`);
+  const port = configService.get<number>('PORT', 3000);
+  await app.listen(port);
+  console.log(`Server is running on: http://localhost:${port}`);
 }
 bootstrap();

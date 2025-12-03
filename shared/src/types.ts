@@ -10,7 +10,6 @@ export interface Message {
   content: string;
   sender: User;
   timestamp: string;
-  isCurrentUser: boolean;
 }
 
 export interface Chat {
@@ -21,3 +20,15 @@ export interface Chat {
   unreadCount?: number;
 }
 
+// WebSocket event types
+export interface TypingIndicator {
+  chatId: string;
+  userId: string;
+  userName: string;
+  isTyping: boolean;
+}
+
+export interface NewMessageEvent {
+  chatId: string;
+  message: Message;
+}

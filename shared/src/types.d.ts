@@ -18,3 +18,13 @@ export interface Chat {
     lastMessage?: Message;
     unreadCount?: number;
 }
+export interface TypingIndicator {
+    chatId: string;
+    userId: string;
+    userName: string;
+    isTyping: boolean;
+}
+export interface NewMessageEvent {
+    chatId: string;
+    message: Message;
+}

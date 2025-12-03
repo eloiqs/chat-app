@@ -5,33 +5,27 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAllUsers } from '@/api/client';
+import { useQuery } from '@tanstack/react-query';
 
 export function UserSelectionPage() {
   const { login } = useAuth();
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const fetchedUsers = await getAllUsers();
-        setUsers(fetchedUsers);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load users');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUsers();
-  }, []);
+  const {
+    data: users,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ['users'],
+    queryFn: async () => {
+      return await getAllUsers();
+    },
+  });
 
   const handleSelectUser = (user: User) => {
     login(user);
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <AppLayout title="Select User">
         <div className="max-w-2xl mx-auto text-center py-12">
@@ -45,10 +39,16 @@ export function UserSelectionPage() {
     return (
       <AppLayout title="Select User">
         <div className="max-w-2xl mx-auto text-center py-12">
-          <p className="text-destructive mb-4">{error}</p>
+          <p className="text-destructive mb-4">
+            {typeof error === 'string' ? error : error.message}
+          </p>
         </div>
       </AppLayout>
     );
+  }
+
+  if (!users) {
+    throw new Error('users is undefined');
   }
 
   return (
