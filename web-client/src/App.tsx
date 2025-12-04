@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ChatListPage } from '@/pages/ChatListPage';
 import { ChatDetailPage } from '@/pages/ChatDetailPage';
+import { ChatDetailPageWithTanstack } from '@/pages/ChatDetailPageWithTanstack';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { UserSelectionPage } from '@/pages/UserSelectionPage';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -19,6 +20,10 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<ChatListPage />} />
         <Route path="/chat/:chatId" element={<ChatDetailPage />} />
+        <Route
+          path="/chat-tanstack/:chatId"
+          element={<ChatDetailPageWithTanstack />}
+        />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </SocketProvider>

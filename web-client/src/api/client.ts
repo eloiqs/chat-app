@@ -1,4 +1,4 @@
-import type { Message } from '@/types/types';
+import type { ClientMessage } from '@/types/types';
 import type * as Shared from 'shared';
 import { toMessage } from './utils';
 
@@ -7,8 +7,8 @@ const API_BASE_URL = import.meta.env.VITE_API_URL + '/api';
 export interface ChatApiClient {
   getAllChats(): Promise<Shared.Chat[]>;
   getChatById(id: string): Promise<Shared.Chat>;
-  getChatMessages(id: string): Promise<Shared.Message[]>;
-  sendMessage(chatId: string, content: string): Promise<Message>;
+  getChatMessages(id: string): Promise<ClientMessage[]>;
+  sendMessage(chatId: string, content: string): Promise<ClientMessage>;
   markChatAsRead(chatId: string): Promise<void>;
 }
 
@@ -52,7 +52,7 @@ export function createChatApi(userId: string): ChatApiClient {
       return response.json();
     },
 
-    async getChatMessages(id: string): Promise<Message[]> {
+    async getChatMessages(id: string): Promise<ClientMessage[]> {
       const response = await fetch(`${API_BASE_URL}/chats/${id}/messages`, {
         headers: getHeaders(),
       });
@@ -66,7 +66,7 @@ export function createChatApi(userId: string): ChatApiClient {
         );
     },
 
-    async sendMessage(chatId: string, content: string): Promise<Message> {
+    async sendMessage(chatId: string, content: string): Promise<ClientMessage> {
       const response = await fetch(`${API_BASE_URL}/chats/${chatId}/messages`, {
         method: 'POST',
         headers: getHeaders(),

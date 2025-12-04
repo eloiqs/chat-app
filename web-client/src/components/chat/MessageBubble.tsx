@@ -1,12 +1,12 @@
 import { cn } from '@/lib/utils';
-import type { Message } from '@/types/types';
+import type { ClientMessage } from '@/types/types';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 export function MessageBubble({
   message,
   onRetry,
 }: {
-  message: Message;
+  message: ClientMessage;
   onRetry?: (messageId: string, content: string) => void;
 }) {
   const formatTime = (timestamp: string) => {
