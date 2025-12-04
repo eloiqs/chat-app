@@ -100,7 +100,7 @@ function ChatBox({ chatId }: { chatId: string }) {
 
   const { mutate: sendMessage } = useMutation({
     mutationFn: (content: string) => chatApi.sendMessage(chatId, content),
-    onMutate: (content: string) => {
+    onMutate: (content) => {
       const optimisticMessage = createOptimisticMessage(
         content,
         currentUser,
@@ -114,7 +114,7 @@ function ChatBox({ chatId }: { chatId: string }) {
       );
       return { optimisticMessage };
     },
-    onSuccess: (message: ClientMessage, _variables, context) => {
+    onSuccess: (message, _variables, context) => {
       queryClient.setQueryData(
         ['messages', chatId],
         (state: ClientMessage[]) => {
@@ -135,7 +135,11 @@ function ChatBox({ chatId }: { chatId: string }) {
           return state.filter((m) => m.id !== context.optimisticMessage.id);
         },
       );
-      addFailedMessage({ ...context.optimisticMessage, error: true, sending: false });
+      addFailedMessage({
+        ...context.optimisticMessage,
+        error: true,
+        sending: false,
+      });
     },
   });
 
