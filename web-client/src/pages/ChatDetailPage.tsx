@@ -6,22 +6,20 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuthUser, useChatApi } from '@/contexts/AuthContext';
-import type { OptimisticMessage } from '@/types/types';
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from '@tanstack/react-query';
+import type { ClientMessage, User } from '@/types/types';
 import { Send } from 'lucide-react';
 import {
+  startTransition,
   Suspense,
+  use,
   useEffect,
   useLayoutEffect,
+  useOptimistic,
   useRef,
+  useState,
   type ReactNode,
 } from 'react';
 import { useParams } from 'react-router-dom';
-import type { Message } from 'shared';
 
 function ChatDetailLayout({ children }: { children: ReactNode }) {
   return (
@@ -34,144 +32,135 @@ function ChatDetailLayout({ children }: { children: ReactNode }) {
 }
 
 export function MessageInput({
-  onSendMessage,
-  sendMessagePending,
+  sendMessageAction,
 }: {
-  onSendMessage: (content: string) => void;
-  sendMessagePending: boolean;
+  sendMessageAction: (content: string) => Promise<void>;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
 
-  const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const message = (event.target as HTMLFormElement).message.value;
+  const submitAction = async (formData: FormData) => {
+    const message = formData.get('message');
     if (message && typeof message === 'string' && message.trim()) {
       formRef.current?.reset();
 
-      onSendMessage(message);
+      await sendMessageAction(message.trim());
     }
   };
 
   return (
-    <form onSubmit={onSubmit} className="flex gap-2" ref={formRef}>
+    <form action={submitAction} className="flex gap-2" ref={formRef}>
       <Input
         type="text"
         name="message"
         placeholder="Type a message..."
         className="flex-1"
       />
-      <Button type="submit" size="icon" disabled={sendMessagePending}>
+      <Button type="submit" size="icon">
         <Send className="h-4 w-4" />
       </Button>
     </form>
   );
 }
 
-function toOptimisticMessage(
-  message: Message,
-  currentUserId: string,
-): OptimisticMessage {
+function createOptimisticMessage(
+  content: string,
+  sender: User,
+  chatId: string,
+): ClientMessage {
+  const timestamp = new Date().toISOString();
   return {
-    ...message,
-    isCurrentUser: message.sender.id === currentUserId,
+    id: `optimistic-${timestamp}`,
+    chatId,
+    content,
+    sender,
+    timestamp,
+    isCurrentUser: true,
+    sending: true,
   };
 }
 
-function ChatBox({ chatId }: { chatId: string }) {
+function ChatBox({
+  chatId,
+  messagesPromise,
+  refetchMessages,
+}: {
+  chatId: string;
+  messagesPromise: Promise<ClientMessage[]>;
+  refetchMessages: () => void;
+}) {
   const { currentUser } = useAuthUser();
   const { chatApi } = useChatApi();
-  const queryClient = useQueryClient();
   const viewportRef = useRef<HTMLDivElement>(null);
+  const messages = use(messagesPromise);
 
-  const { data: messages } = useSuspenseQuery({
-    queryKey: ['chatMessages', chatId],
-    queryFn: async () => {
-      const msgs = await chatApi.getChatMessages(chatId);
-      return msgs.map((m) => toOptimisticMessage(m, currentUser.id));
-    },
-    networkMode: 'always',
-    retry: false,
-  });
+  const [failedMessages, setFailedMessages] = useState<ClientMessage[]>([]);
 
-  const { mutate: sendMessage, isPending: sendMessagePending } = useMutation({
-    mutationFn: async (content: string) => {
-      return chatApi.sendMessage(chatId, content);
-    },
-    onMutate: async (content: string) => {
-      // Snapshot the previous messages
-      const previousMessages =
-        queryClient.getQueryData<OptimisticMessage[]>([
-          'chatMessages',
-          chatId,
-        ]) || [];
-
-      // Separate successful and failed messages
-      const successfulMessages = previousMessages.filter((m) => !m.error);
-      const failedMessages = previousMessages.filter((m) => m.error);
-
-      // Create optimistic message
-      const optimisticMessage: OptimisticMessage = {
-        id: `optimistic-${Date.now()}`,
-        chatId: chatId,
-        content,
-        sender: currentUser,
-        timestamp: new Date().toISOString(),
-        isCurrentUser: true,
-        sending: true,
-      };
-
-      // Optimistically update the cache with failed messages at the bottom
-      queryClient.setQueryData<OptimisticMessage[]>(
-        ['chatMessages', chatId],
-        [...successfulMessages, optimisticMessage, ...failedMessages],
-      );
-
-      // Return context with previous messages and optimistic message
-      return { previousMessages, optimisticMessage };
-    },
-    onSuccess: (newMessage, _variables, context) => {
-      // Replace the optimistic message with the real one, keeping failed messages at bottom
-      queryClient.setQueryData<OptimisticMessage[]>(
-        ['chatMessages', chatId],
-        (old = []) => {
-          const successfulMessages = old.filter(
-            (m) => !m.error && m.id !== context?.optimisticMessage.id,
+  const [optimisticMessages, optimisticMessageDispatch] = useOptimistic(
+    [...messages, ...failedMessages],
+    (
+      state,
+      action: { type: 'add' | 'remove' | 'update'; message: ClientMessage },
+    ) => {
+      switch (action.type) {
+        case 'add':
+          return [...state, action.message];
+        case 'update':
+          return state.map((m) =>
+            m.id === action.message.id ? action.message : m,
           );
-          const failedMessages = old.filter((m) => m.error);
-          return [
-            ...successfulMessages,
-            toOptimisticMessage(newMessage, currentUser.id),
-            ...failedMessages,
-          ];
-        },
-      );
-    },
-    onError: (_error, _variables, context) => {
-      // Rollback to previous messages
-      if (context?.previousMessages) {
-        queryClient.setQueryData(
-          ['chatMessages', chatId],
-          context.previousMessages,
-        );
+        case 'remove':
+          return state.filter((m) => m.id !== action.message.id);
       }
-
-      // Add the failed message back with error flag at the bottom
-      const failedMessage: OptimisticMessage = {
-        ...context!.optimisticMessage,
-        error: true,
-        sending: false,
-      };
-
-      queryClient.setQueryData<OptimisticMessage[]>(
-        ['chatMessages', chatId],
-        (old = []) => {
-          const successfulMessages = old.filter((m) => !m.error);
-          const failedMessages = old.filter((m) => m.error);
-          return [...successfulMessages, ...failedMessages, failedMessage];
-        },
-      );
     },
-  });
+  );
+
+  const addOptimisticMessage = (message: ClientMessage) => {
+    optimisticMessageDispatch({ type: 'add', message });
+  };
+  const updateOptimisticMessage = (message: ClientMessage) => {
+    optimisticMessageDispatch({ type: 'update', message });
+  };
+  const removeOptimisticMessage = (message: ClientMessage) => {
+    optimisticMessageDispatch({ type: 'remove', message });
+  };
+
+  const sendMessageAction = async (content: string) => {
+    const optimisticMessage = createOptimisticMessage(
+      content,
+      currentUser,
+      chatId,
+    );
+
+    addOptimisticMessage(optimisticMessage);
+
+    try {
+      await chatApi.sendMessage(chatId, content);
+
+      updateOptimisticMessage({ ...optimisticMessage, sending: false });
+
+      startTransition(() => {
+        refetchMessages();
+      });
+    } catch {
+      startTransition(() => {
+        removeOptimisticMessage(optimisticMessage);
+        setFailedMessages((state) => {
+          return [
+            ...state,
+            { ...optimisticMessage, error: true, sending: false },
+          ];
+        });
+      });
+    }
+  };
+
+  const retryMessage = (messageId: string, content: string) => {
+    setFailedMessages((state) => state.filter((m) => m.id !== messageId));
+
+    startTransition(async () => {
+      await sendMessageAction(content);
+    });
+  };
 
   useEffect(() => {
     chatApi.markChatAsRead(chatId);
@@ -182,23 +171,12 @@ function ChatBox({ chatId }: { chatId: string }) {
       behavior: 'instant',
       top: viewportRef.current.scrollHeight,
     });
-  }, [messages?.length]);
-
-  const retryMessage = (messageId: string, content: string) => {
-    // Remove the failed message from cache
-    queryClient.setQueryData<OptimisticMessage[]>(
-      ['chatMessages', chatId],
-      (old = []) => old.filter((m) => m.id !== messageId),
-    );
-
-    // Retry sending the message
-    sendMessage(content);
-  };
+  }, [optimisticMessages.length]);
 
   return (
     <Card className="flex-1 flex flex-col overflow-hidden">
       <ScrollArea className="flex-1 p-4" viewportRef={viewportRef}>
-        {messages.map((message) => (
+        {optimisticMessages.map((message) => (
           <MessageBubble
             key={message.id}
             message={message}
@@ -206,7 +184,7 @@ function ChatBox({ chatId }: { chatId: string }) {
           />
         ))}
 
-        {messages.length === 0 && (
+        {optimisticMessages.length === 0 && (
           <div className="text-center text-muted-foreground py-12">
             <p>No messages yet. Start the conversation!</p>
           </div>
@@ -214,10 +192,7 @@ function ChatBox({ chatId }: { chatId: string }) {
       </ScrollArea>
 
       <div className="border-t p-4">
-        <MessageInput
-          onSendMessage={sendMessage}
-          sendMessagePending={sendMessagePending}
-        />
+        <MessageInput sendMessageAction={sendMessageAction} />
       </div>
     </Card>
   );
@@ -243,6 +218,14 @@ ChatBox.Error = function ChatBoxError() {
 
 export function ChatDetailPage() {
   const { chatId } = useParams<{ chatId: string }>();
+  const { chatApi } = useChatApi();
+  const [messagesPromise, setMessagesPromise] = useState(() =>
+    chatApi.getChatMessages(chatId!),
+  );
+
+  const refetchMessages = () => {
+    setMessagesPromise(chatApi.getChatMessages(chatId!));
+  };
 
   if (!chatId) {
     // ChatDetailPage should only be rendered when there is a chatId in the URL
@@ -253,7 +236,11 @@ export function ChatDetailPage() {
     <ChatDetailLayout>
       <ErrorBoundary fallback={<ChatBox.Error />}>
         <Suspense fallback={<ChatBox.Loading />}>
-          <ChatBox chatId={chatId} />
+          <ChatBox
+            chatId={chatId}
+            messagesPromise={messagesPromise}
+            refetchMessages={refetchMessages}
+          />
         </Suspense>
       </ErrorBoundary>
     </ChatDetailLayout>
