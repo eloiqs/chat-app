@@ -165,6 +165,10 @@ function ChatBox({
     });
   };
 
+  const deleteMessage = (messageId: string) => {
+    setFailedMessages((state) => state.filter((m) => m.id !== messageId));
+  };
+
   useEffect(() => {
     chatApi.markChatAsRead(chatId);
   }, [chatId, chatApi]);
@@ -184,6 +188,7 @@ function ChatBox({
             key={message.id}
             message={message}
             onRetry={message.error ? retryMessage : undefined}
+            onDelete={message.error ? deleteMessage : undefined}
           />
         ))}
 

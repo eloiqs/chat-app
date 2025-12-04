@@ -1,14 +1,20 @@
 import { cn } from '@/lib/utils';
 import type { ClientMessage } from '@/types/types';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, X, RotateCcw } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useState } from 'react';
 
 export function MessageBubble({
   message,
   onRetry,
+  onDelete,
 }: {
   message: ClientMessage;
   onRetry?: (messageId: string, content: string) => void;
+  onDelete?: (messageId: string) => void;
 }) {
+  const [tooltipOpen, setTooltipOpen] = useState(false);
+
   const formatTime = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString('en-US', {
       hour: 'numeric',
@@ -35,27 +41,48 @@ export function MessageBubble({
           message.isCurrentUser
             ? 'bg-primary text-primary-foreground'
             : 'bg-muted',
-          message.error &&
-            'opacity-60 cursor-pointer hover:opacity-50 transition-opacity',
+          message.error && 'opacity-60',
           message.sending && 'opacity-70',
         )}
-        onClick={
-          message.error && onRetry
-            ? () => onRetry(message.id, message.content)
-            : undefined
-        }
       >
         <p className="text-sm">{message.content}</p>
       </div>
 
       {message.error ? (
-        <button
-          onClick={() => onRetry?.(message.id, message.content)}
-          className="text-xs text-red-500 dark:text-red-400 mt-1 px-2 flex items-center gap-1 hover:text-red-600 dark:hover:text-red-300 cursor-pointer"
-        >
-          <AlertCircle className="h-3 w-3" />
-          Not sent. Tap to retry.
-        </button>
+        <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
+          <TooltipTrigger asChild>
+            <button
+              className="text-xs text-red-500 dark:text-red-400 mt-1 px-2 flex items-center gap-1 hover:text-red-600 dark:hover:text-red-300 cursor-pointer"
+            >
+              <AlertCircle className="h-3 w-3" />
+              Not sent. Tap for options.
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="p-2 flex flex-col gap-1">
+            <button
+              onClick={() => {
+                onRetry?.(message.id, message.content);
+                setTooltipOpen(false);
+              }}
+              className="flex items-center gap-2 px-3 py-2 hover:bg-background/20 rounded text-sm whitespace-nowrap"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Retry
+            </button>
+            {onDelete && (
+              <button
+                onClick={() => {
+                  onDelete(message.id);
+                  setTooltipOpen(false);
+                }}
+                className="flex items-center gap-2 px-3 py-2 hover:bg-background/20 rounded text-sm whitespace-nowrap"
+              >
+                <X className="h-4 w-4" />
+                Delete
+              </button>
+            )}
+          </TooltipContent>
+        </Tooltip>
       ) : message.sending ? (
         <span className="text-xs text-muted-foreground mt-1 px-2 flex items-center gap-1">
           <Loader2 className="h-3 w-3 animate-spin" />
