@@ -71,11 +71,11 @@ export function useFailedMessages(chatId: string) {
     });
   };
 
-  const addFailedMessage = (message: ClientMessage) => {
+  const saveFailedMessage = (message: ClientMessage) => {
     setFailedMessages((prev) => [...prev, message]);
   };
 
-  const removeFailedMessage = (messageId: string) => {
+  const deleteFailedMessage = (messageId: string) => {
     setFailedMessages((prev) => prev.filter((m) => m.id !== messageId));
   };
 
@@ -93,8 +93,8 @@ export function useFailedMessages(chatId: string) {
   return {
     failedMessages,
     setFailedMessages,
-    addFailedMessage,
-    removeFailedMessage,
+    saveFailedMessage,
+    deleteFailedMessage,
     clearFailedMessages,
   };
 }

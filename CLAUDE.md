@@ -4,110 +4,114 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a monorepo demonstrating React data fetching patterns with a NestJS backend. The project consists of three npm workspaces:
-- `web-client`: React + TypeScript + Vite frontend
-- `server`: NestJS backend API
-- `shared`: Shared TypeScript types used by both client and server
+A monorepo demonstrating React data fetching patterns with optimistic UI, featuring:
+- Two implementations of chat detail pages: one using React 19's native `useOptimistic`, another using TanStack Query's optimistic updates
+- Real-time chat with WebSocket support via Socket.IO
+- Failed message persistence in sessionStorage
+- NestJS backend with REST API and WebSocket gateway
 
-## Development Commands
+## Commands
 
-### Running the Application
+### Development
 ```bash
-# Install all dependencies (run once after cloning)
-npm install
-
-# Run both client and server together (recommended for development)
-npm run dev:all
-
-# Run only the web client (http://localhost:5173)
-npm run dev
-
-# Run only the server (http://localhost:3000)
-npm run dev:server
+npm run dev:all          # Run both frontend and backend concurrently
+npm run dev              # Run only web-client (frontend) on http://localhost:5173
+npm run dev:server       # Run only server (backend) on http://localhost:3000
 ```
 
-### Building
+### Building & Linting
 ```bash
-# Build all workspaces
-npm run build
+npm run build            # Build all workspaces
+npm run lint             # Lint all workspaces
+```
 
-# Build individual workspace
+### Workspace-Specific Commands
+```bash
+# Web client
 npm run build --workspace=web-client
-npm run build --workspace=server
-npm run build --workspace=shared
-```
-
-### Linting
-```bash
-# Lint all workspaces
-npm run lint
-
-# Lint individual workspace
 npm run lint --workspace=web-client
-npm run lint --workspace=server
-```
+npm run preview --workspace=web-client
 
-### Working with Workspaces
-```bash
-# Run any script in a specific workspace
-npm run <script-name> --workspace=<workspace-name>
-
-# Install package in specific workspace
-npm install <package-name> --workspace=<workspace-name>
+# Server
+npm run build --workspace=server
+npm run start --workspace=server        # Production mode
 ```
 
 ## Architecture
 
-### Data Flow
-1. **Shared Types** (`shared/src/types.ts`): Defines `Chat` and `Message` interfaces used across client and server
-2. **Server** (`server/src/chat/`): NestJS module with ChatService (in-memory mock data) and ChatController (REST endpoints)
-3. **API Client** (`web-client/src/api/client.ts`): Frontend wrapper for fetch calls to server endpoints
-4. **React Pages**: Use the API client to fetch and display data
+### Monorepo Structure
+- **web-client/** - React 19 + TypeScript + Vite frontend
+- **server/** - NestJS backend with REST API and WebSocket gateway
+- **shared/** - Shared TypeScript types used by both client and server
 
-### Server Endpoints
-All endpoints are prefixed with `/api/chats`:
-- `GET /api/chats` - Get all chats
-- `GET /api/chats/:id` - Get chat by ID
-- `GET /api/chats/:id/messages` - Get messages for a chat
+### Key Architectural Patterns
 
-### CORS Configuration
-The server (server/src/main.ts:8-11) has CORS enabled specifically for `http://localhost:5173` (Vite's default port). When modifying CORS settings or port numbers, ensure both client and server configurations remain in sync.
+#### Context-Based Architecture (web-client)
+The app uses a hierarchical context structure:
+1. `AuthProvider` - Top-level, manages user authentication and session storage
+2. `UserProvider` - Created when user logs in, provides user data
+3. `ChatApiProvider` - Nested under UserProvider, creates user-specific API client
+4. `SocketProvider` - Created after login, manages WebSocket connection
 
-### Routing Structure
-The web client uses React Router with three routes defined in `App.tsx`:
-- `/` - ChatListPage (displays all chats)
-- `/chat/:chatId` - ChatDetailPage (displays messages for a specific chat)
-- `*` - NotFoundPage (404 handler)
+Access patterns:
+- `useAuth()` - Login/logout and user state
+- `useAuthUser()` - Current user (only available when authenticated)
+- `useChatApi()` - API client with user ID pre-configured
+- `useSocket()` - WebSocket operations and event subscriptions
 
-### TypeScript Path Aliases
-The web-client uses `@/*` as an alias for `./src/*` (configured in tsconfig.json). Import from pages, components, and api using this alias:
-```typescript
-import { ChatListPage } from '@/pages/ChatListPage';
-import { chatApi } from '@/api/client';
-```
+#### Two Optimistic UI Implementations
+**Route: `/chat/:chatId`** (ChatDetailPage.tsx)
+- Uses React 19's native `useOptimistic` hook
+- Manual state management with `use()` and Suspense
+- Failed messages stored in sessionStorage via `useFailedMessages` hook
 
-### Component Organization
-- `web-client/src/components/ui/`: Reusable UI components (Button, Card, Input, etc.) - mostly Radix UI wrappers with Tailwind styling
-- `web-client/src/components/chat/`: Chat-specific components (MessageBubble, MessageInput, ChatListItem)
-- `web-client/src/components/layout/`: Layout components (AppLayout)
-- `web-client/src/pages/`: Top-level page components that handle routing
+**Route: `/chat-tanstack/:chatId`** (ChatDetailPageWithTanstack.tsx)
+- Uses TanStack Query's `useMutation` with optimistic updates
+- Automatic cache management and refetching
+- Also uses `useFailedMessages` for persistence
 
-### Mock Data
-The server uses in-memory mock data defined in `server/src/chat/chat.service.ts`. Messages and chats are hardcoded arrays. There is no database or persistence layer.
+#### Real-time Communication (server)
+- **ChatController** - REST endpoints for chat operations (`/api/chats/*`)
+- **ChatGateway** - WebSocket gateway for real-time events
+  - `authenticate` - Associates socket with userId
+  - `join_chat` / `leave_chat` - Room management
+  - `typing` - Typing indicators
+  - `new_message` - Broadcast new messages to chat room
+  - `user_typing` - Broadcast typing status
 
-## Tech Stack Notes
+ChatGateway is injected into ChatService via `setChatGateway()` to enable broadcasting from REST endpoints.
 
-### Web Client
-- React 19 with experimental React Compiler (babel-plugin-react-compiler)
-- Tailwind CSS v4 with `@tailwindcss/vite` plugin
-- Radix UI for accessible component primitives
-- React Router v7 for routing
-- Vite v7 for build tooling
+#### Type Safety
+The `shared` workspace exports TypeScript types used by both client and server:
+- `User`, `Message`, `Chat` - Core domain types
+- `TypingIndicator`, `NewMessageEvent` - WebSocket event types
 
-### Server
-- NestJS v10 with Express platform
-- TypeScript decorators enabled for NestJS metadata
-- No database - uses in-memory data store
+Client-side types in `web-client/src/types/types.ts`:
+- `ClientMessage` - Extends Message with `isCurrentUser` and `status` for UI state
 
-### Shared Package
-The shared package exports types and must be built (`npm run build --workspace=shared`) before being imported by other workspaces in production builds. During development, TypeScript references handle this automatically.
+#### Failed Message Handling
+`useFailedMessages` hook provides:
+- Persistent storage in sessionStorage (keyed by userId and chatId)
+- Automatic cleanup on logout
+- Add/remove/clear operations for failed messages
+
+Both chat implementations use this to persist optimistic messages that fail to send.
+
+## Environment Configuration
+
+### Server (.env)
+- `PORT` - Server port (default: 3000)
+- `CORS_ORIGINS` - Comma-separated allowed origins
+- `CORS_CREDENTIALS` - Enable credentials (default: true)
+
+### Web Client (.env.local)
+- `VITE_API_URL` - Backend URL (default: http://localhost:3000)
+
+Copy `.env.example` files to create `.env` / `.env.local` before running.
+
+## Important Notes
+
+- User authentication is mock-based via x-user-id header and socket authentication event (not production-ready)
+- WebSocket connections authenticate via `authenticate` event after connection
+- The app requires both client and server running for full functionality
+- React Compiler is enabled via babel-plugin-react-compiler

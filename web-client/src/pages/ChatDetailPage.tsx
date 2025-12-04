@@ -94,8 +94,11 @@ function ChatBox({
   const viewportRef = useRef<HTMLDivElement>(null);
   const messages = use(messagesPromise);
 
-  const { failedMessages, addFailedMessage, removeFailedMessage } =
-    useFailedMessages(chatId);
+  const {
+    failedMessages,
+    saveFailedMessage: addFailedMessage,
+    deleteFailedMessage: removeFailedMessage,
+  } = useFailedMessages(chatId);
 
   const [optimisticMessages, optimisticMessageDispatch] = useOptimistic(
     [...messages, ...failedMessages],

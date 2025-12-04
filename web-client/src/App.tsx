@@ -7,6 +7,7 @@ import { UserSelectionPage } from '@/pages/UserSelectionPage';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ChatDetailPageLegacy } from './pages/ChatDetailPageLegacy';
 
 function AppRoutes() {
   const { currentUser } = useAuth();
@@ -19,6 +20,7 @@ function AppRoutes() {
     <SocketProvider userId={currentUser.id}>
       <Routes>
         <Route path="/" element={<ChatListPage />} />
+        <Route path="/chat-legacy/:chatId" element={<ChatDetailPageLegacy />} />
         <Route path="/chat/:chatId" element={<ChatDetailPage />} />
         <Route
           path="/chat-tanstack/:chatId"

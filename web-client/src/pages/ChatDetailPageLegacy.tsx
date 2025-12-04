@@ -1,25 +1,21 @@
 import { MessageBubble } from '@/components/chat/MessageBubble';
-import { ErrorBoundary, useError } from '@/components/error-boundary';
+import { useError } from '@/components/error-boundary';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuthUser, useChatApi } from '@/contexts/AuthContext';
-import type { ClientMessage, User } from '@/types/types';
 import { useFailedMessages } from '@/hooks/useFailedMessages';
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from '@tanstack/react-query';
+import type { ClientMessage, User } from '@/types/types';
 import { Send } from 'lucide-react';
 import {
-  startTransition,
-  Suspense,
   useEffect,
   useLayoutEffect,
+  useReducer,
   useRef,
+  useState,
+  type FormEvent,
   type ReactNode,
 } from 'react';
 import { useParams } from 'react-router-dom';
@@ -35,23 +31,24 @@ function ChatDetailLayout({ children }: { children: ReactNode }) {
 }
 
 export function MessageInput({
-  sendMessage,
+  sendMessageAction,
 }: {
-  sendMessage: (content: string) => void;
+  sendMessageAction: (content: string) => Promise<void>;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
 
-  const submitAction = async (formData: FormData) => {
-    const message = formData.get('message');
+  const submitAction = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const message = event.currentTarget.message.value;
     if (message && typeof message === 'string' && message.trim()) {
       formRef.current?.reset();
 
-      sendMessage(message.trim());
+      await sendMessageAction(message.trim());
     }
   };
 
   return (
-    <form action={submitAction} className="flex gap-2" ref={formRef}>
+    <form onSubmit={submitAction} className="flex gap-2" ref={formRef}>
       <Input
         type="text"
         name="message"
@@ -85,77 +82,118 @@ function createOptimisticMessage(
 function ChatBox({ chatId }: { chatId: string }) {
   const { currentUser } = useAuthUser();
   const { chatApi } = useChatApi();
-  const queryClient = useQueryClient();
   const viewportRef = useRef<HTMLDivElement>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<unknown | null>(null);
 
-  const { data: messages } = useSuspenseQuery({
-    queryKey: ['messages', chatId],
-    queryFn: () => chatApi.getChatMessages(chatId),
-  });
+  const { failedMessages, saveFailedMessage, deleteFailedMessage } =
+    useFailedMessages(chatId);
 
-  const {
-    failedMessages,
-    saveFailedMessage: addFailedMessage,
-    deleteFailedMessage: removeFailedMessage,
-  } = useFailedMessages(chatId);
-
-  const optimisticMessages = [...messages, ...failedMessages];
-
-  const { mutate: sendMessage } = useMutation({
-    mutationFn: (content: string) => chatApi.sendMessage(chatId, content),
-    onMutate: (content) => {
-      const optimisticMessage = createOptimisticMessage(
-        content,
-        currentUser,
-        chatId,
-      );
-      queryClient.setQueryData(
-        ['messages', chatId],
-        (state: ClientMessage[]) => {
-          return [...state, optimisticMessage];
-        },
-      );
-      return { optimisticMessage };
-    },
-    onSuccess: (message, _variables, context) => {
-      queryClient.setQueryData(
-        ['messages', chatId],
-        (state: ClientMessage[]) => {
+  const [optimisticMessages, optimisticMessageDispatch] = useReducer(
+    (
+      state,
+      action:
+        | { type: 'sync'; messages: ClientMessage[] }
+        | { type: 'add'; message: ClientMessage }
+        | { type: 'update'; messageId: string; message: ClientMessage }
+        | { type: 'remove'; messageId: string },
+    ) => {
+      switch (action.type) {
+        case 'sync': {
+          return [...action.messages, ...failedMessages];
+        }
+        case 'add': {
+          const messages = state.filter((m) => !m.error);
+          return [...messages, action.message, ...failedMessages];
+        }
+        case 'update':
           return state.map((m) =>
-            m.id === context.optimisticMessage.id ? message : m,
+            m.id === action.messageId ? action.message : m,
           );
-        },
-      );
-      queryClient.invalidateQueries({
-        queryKey: ['messages', chatId],
-      });
+        case 'remove':
+          return state.filter((m) => m.id !== action.messageId);
+      }
     },
-    onError: (_error, _variables, context) => {
-      if (!context) return;
-      queryClient.setQueryData(
-        ['messages', chatId],
-        (state: ClientMessage[]) => {
-          return state.filter((m) => m.id !== context.optimisticMessage.id);
-        },
-      );
-      addFailedMessage({
-        ...context.optimisticMessage,
+    [...failedMessages],
+  );
+
+  const syncOptimisticMessages = (messages: ClientMessage[]) => {
+    optimisticMessageDispatch({ type: 'sync', messages });
+  };
+
+  const addOptimisticMessage = (message: ClientMessage) => {
+    optimisticMessageDispatch({ type: 'add', message });
+  };
+
+  const updateOptimisticMessage = (
+    messageId: string,
+    message: ClientMessage,
+  ) => {
+    optimisticMessageDispatch({ type: 'update', messageId, message });
+  };
+
+  const removeOptimisticMessage = (messageId: string) => {
+    optimisticMessageDispatch({ type: 'remove', messageId });
+  };
+
+  const fetchMessages = async (isRefetch = false) => {
+    if (!isRefetch) {
+      setIsLoading(true);
+      setError(null);
+    }
+
+    try {
+      const messages = await chatApi.getChatMessages(chatId);
+      syncOptimisticMessages(messages);
+    } catch (error) {
+      if (!isRefetch) {
+        setError(error);
+      }
+    }
+
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    fetchMessages();
+  }, [chatId, fetchMessages]);
+
+  const sendMessageAction = async (content: string) => {
+    const optimisticMessage = createOptimisticMessage(
+      content,
+      currentUser,
+      chatId,
+    );
+
+    addOptimisticMessage(optimisticMessage);
+
+    try {
+      const newMessage = await chatApi.sendMessage(chatId, content);
+
+      updateOptimisticMessage(optimisticMessage.id, newMessage);
+
+      fetchMessages(true);
+    } catch {
+      const failedMessage = {
+        ...optimisticMessage,
         error: true,
         sending: false,
-      });
-    },
-  });
+      };
+      saveFailedMessage(failedMessage);
+      updateOptimisticMessage(optimisticMessage.id, failedMessage);
+    }
+  };
 
-  const retryMessage = (messageId: string, content: string) => {
-    removeFailedMessage(messageId);
+  const retryMessage = async (messageId: string, content: string) => {
+    deleteFailedMessage(messageId);
+    removeOptimisticMessage(messageId);
 
-    startTransition(() => {
-      sendMessage(content);
-    });
+    await sendMessageAction(content);
   };
 
   const deleteMessage = (messageId: string) => {
-    removeFailedMessage(messageId);
+    deleteFailedMessage(messageId);
+    removeOptimisticMessage(messageId);
   };
 
   useEffect(() => {
@@ -168,6 +206,14 @@ function ChatBox({ chatId }: { chatId: string }) {
       top: viewportRef.current.scrollHeight,
     });
   }, [optimisticMessages.length]);
+
+  if (isLoading) {
+    return <ChatBox.Loading />;
+  }
+
+  if (error) {
+    return <ChatBox.Error />;
+  }
 
   return (
     <Card className="flex-1 flex flex-col overflow-hidden">
@@ -189,7 +235,7 @@ function ChatBox({ chatId }: { chatId: string }) {
       </ScrollArea>
 
       <div className="border-t p-4">
-        <MessageInput sendMessage={sendMessage} />
+        <MessageInput sendMessageAction={sendMessageAction} />
       </div>
     </Card>
   );
@@ -213,7 +259,7 @@ ChatBox.Error = function ChatBoxError() {
   );
 };
 
-export function ChatDetailPageWithTanstack() {
+export function ChatDetailPageLegacy() {
   const { chatId } = useParams<{ chatId: string }>();
 
   if (!chatId) {
@@ -223,11 +269,7 @@ export function ChatDetailPageWithTanstack() {
 
   return (
     <ChatDetailLayout>
-      <ErrorBoundary fallback={<ChatBox.Error />}>
-        <Suspense fallback={<ChatBox.Loading />}>
-          <ChatBox chatId={chatId} />
-        </Suspense>
-      </ErrorBoundary>
+      <ChatBox chatId={chatId} />
     </ChatDetailLayout>
   );
 }
