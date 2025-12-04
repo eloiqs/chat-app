@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuthUser, useChatApi } from '@/contexts/AuthContext';
+import { useFailedMessages } from '@/hooks/useFailedMessages';
 import type { ClientMessage, User } from '@/types/types';
 import { Send } from 'lucide-react';
 import {
@@ -93,7 +94,8 @@ function ChatBox({
   const viewportRef = useRef<HTMLDivElement>(null);
   const messages = use(messagesPromise);
 
-  const [failedMessages, setFailedMessages] = useState<ClientMessage[]>([]);
+  const { failedMessages, addFailedMessage, removeFailedMessage } =
+    useFailedMessages(chatId);
 
   const [optimisticMessages, optimisticMessageDispatch] = useOptimistic(
     [...messages, ...failedMessages],
@@ -147,18 +149,13 @@ function ChatBox({
     } catch {
       startTransition(() => {
         removeOptimisticMessage(optimisticMessage);
-        setFailedMessages((state) => {
-          return [
-            ...state,
-            { ...optimisticMessage, error: true, sending: false },
-          ];
-        });
+        addFailedMessage({ ...optimisticMessage, error: true, sending: false });
       });
     }
   };
 
   const retryMessage = (messageId: string, content: string) => {
-    setFailedMessages((state) => state.filter((m) => m.id !== messageId));
+    removeFailedMessage(messageId);
 
     startTransition(async () => {
       await sendMessageAction(content);
@@ -166,7 +163,7 @@ function ChatBox({
   };
 
   const deleteMessage = (messageId: string) => {
-    setFailedMessages((state) => state.filter((m) => m.id !== messageId));
+    removeFailedMessage(messageId);
   };
 
   useEffect(() => {

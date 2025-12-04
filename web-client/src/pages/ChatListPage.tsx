@@ -2,13 +2,13 @@ import { Suspense } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ChatListItem } from '@/components/chat/ChatListItem';
 import { Button } from '@/components/ui/button';
-import { useAuth, useAuthUser } from '@/contexts/AuthContext';
+import { useAuth, useAuthUser, useChatApi } from '@/contexts/AuthContext';
 import { LogOut } from 'lucide-react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { useSuspenseQuery } from '@tanstack/react-query';
 
 function ChatList() {
-  const { chatApi } = useAuthUser();
+  const { chatApi } = useChatApi();
 
   const { data: chats } = useSuspenseQuery({
     queryKey: ['chats'],

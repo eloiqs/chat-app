@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuthUser, useChatApi } from '@/contexts/AuthContext';
 import type { ClientMessage, User } from '@/types/types';
+import { useFailedMessages } from '@/hooks/useFailedMessages';
 import {
   useMutation,
   useQueryClient,
@@ -19,7 +20,6 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
-  useState,
   type ReactNode,
 } from 'react';
 import { useParams } from 'react-router-dom';
@@ -93,7 +93,8 @@ function ChatBox({ chatId }: { chatId: string }) {
     queryFn: () => chatApi.getChatMessages(chatId),
   });
 
-  const [failedMessages, setFailedMessages] = useState<ClientMessage[]>([]);
+  const { failedMessages, addFailedMessage, removeFailedMessage } =
+    useFailedMessages(chatId);
 
   const optimisticMessages = [...messages, ...failedMessages];
 
@@ -134,15 +135,12 @@ function ChatBox({ chatId }: { chatId: string }) {
           return state.filter((m) => m.id !== context.optimisticMessage.id);
         },
       );
-      setFailedMessages((state) => [
-        ...state,
-        { ...context.optimisticMessage, error: true, sending: false },
-      ]);
+      addFailedMessage({ ...context.optimisticMessage, error: true, sending: false });
     },
   });
 
   const retryMessage = (messageId: string, content: string) => {
-    setFailedMessages((state) => state.filter((m) => m.id !== messageId));
+    removeFailedMessage(messageId);
 
     startTransition(() => {
       sendMessage(content);
@@ -150,7 +148,7 @@ function ChatBox({ chatId }: { chatId: string }) {
   };
 
   const deleteMessage = (messageId: string) => {
-    setFailedMessages((state) => state.filter((m) => m.id !== messageId));
+    removeFailedMessage(messageId);
   };
 
   useEffect(() => {

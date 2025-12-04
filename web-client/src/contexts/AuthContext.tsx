@@ -6,6 +6,7 @@ interface AuthContextType {
   login: (user: User) => void;
   logout: () => void;
   currentUser: User | null;
+  onLogout: (callback: () => void) => () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -74,6 +75,9 @@ export function useChatApi() {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState(getStoredUser);
+  const [logoutCallbacks, setLogoutCallbacks] = useState<Set<() => void>>(
+    () => new Set(),
+  );
 
   const login = (user: User) => {
     setCurrentUser(user);
@@ -81,12 +85,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    logoutCallbacks.forEach((callback) => callback());
     setCurrentUser(null);
     sessionStorage.removeItem(STORAGE_KEY);
   };
 
+  const onLogout = (callback: () => void) => {
+    setLogoutCallbacks((prev) => new Set(prev).add(callback));
+    return () => {
+      setLogoutCallbacks((prev) => {
+        console.log('logoutCallbacks', prev);
+        const next = new Set(prev);
+        next.delete(callback);
+        return next;
+      });
+    };
+  };
+
   return (
-    <AuthContext.Provider value={{ login, logout, currentUser }}>
+    <AuthContext.Provider value={{ login, logout, currentUser, onLogout }}>
       {currentUser ? (
         <UserProvider user={currentUser}>
           <ChatApiProvider>{children}</ChatApiProvider>
