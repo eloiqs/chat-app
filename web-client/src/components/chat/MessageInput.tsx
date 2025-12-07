@@ -1,17 +1,15 @@
-import { useOptimistic, useRef } from 'react';
+import { useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Send } from 'lucide-react';
 
-interface MessageInputProps {
-  sendMessageAction: (content: string) => void;
-  sendMessagePending: boolean;
-}
-
 export function MessageInput({
   sendMessageAction,
   sendMessagePending,
-}: MessageInputProps) {
+}: {
+  sendMessageAction: (content: string) => void;
+  sendMessagePending: boolean;
+}) {
   const formRef = useRef<HTMLFormElement>(null);
 
   const submitAction = async (formData: FormData) => {

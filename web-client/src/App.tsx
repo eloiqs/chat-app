@@ -98,6 +98,10 @@ function ChatDasboardLayout({ children }: { children: ReactNode }) {
 type ChatDashboardOutletContext = {
   chats: Chat[];
   markChatAsReadAction: (chatId: string) => void;
+  updateChatAction: (chat: Chat) => {
+    confirm: () => void;
+    rollback: () => void;
+  };
 };
 
 function ChatDashboard({
@@ -117,14 +121,14 @@ function ChatDashboard({
       state,
       action:
         | { type: 'markAsRead'; chat: Chat }
-        | { type: 'rollback'; chat: Chat },
+        | { type: 'update'; chat: Chat },
     ) => {
       switch (action.type) {
         case 'markAsRead':
           return state.map((c) =>
             c.id === action.chat.id ? { ...c, unreadCount: 0 } : c,
           );
-        case 'rollback':
+        case 'update':
           return state.map((c) => (c.id === action.chat.id ? action.chat : c));
       }
     },
@@ -137,8 +141,22 @@ function ChatDashboard({
     });
     return () => {
       optimisticChatDispatch({
-        type: 'rollback',
+        type: 'update',
         chat,
+      });
+    };
+  };
+
+  const updateChat = (chat: Chat) => {
+    const originalChat = optimisticChats.find((c) => c.id === chat.id);
+    optimisticChatDispatch({
+      type: 'update',
+      chat,
+    });
+    return () => {
+      optimisticChatDispatch({
+        type: 'update',
+        chat: originalChat!,
       });
     };
   };
@@ -164,6 +182,26 @@ function ChatDashboard({
     });
   };
 
+  const updateChatAction = (chat: Chat) => {
+    const originalChat = optimisticChats.find((c) => c.id === chat.id);
+    updateChat(chat);
+
+    const confirm = () => {
+      startTransition(() => {
+        refetchChats();
+      });
+    };
+
+    const rollback = () => {
+      optimisticChatDispatch({
+        type: 'update',
+        chat: originalChat!,
+      });
+    };
+
+    return { confirm, rollback };
+  };
+
   return (
     <div className="flex gap-4 h-full">
       <ChatList className="w-80" chats={optimisticChats} />
@@ -173,6 +211,7 @@ function ChatDashboard({
             {
               chats: optimisticChats,
               markChatAsReadAction,
+              updateChatAction,
             } satisfies ChatDashboardOutletContext
           }
         />
@@ -254,6 +293,7 @@ function createOptimisticMessage(
   content: string,
   sender: User,
   chatId: string,
+  sending = true,
 ): ClientMessage {
   const timestamp = new Date().toISOString();
   return {
@@ -263,20 +303,25 @@ function createOptimisticMessage(
     sender,
     timestamp,
     isCurrentUser: true,
-    sending: true,
+    sending,
   };
 }
 
 function ChatMessages({
-  chatId,
+  chat,
   messagesPromise,
   refetchMessages,
   onMessagesRead,
+  onOptimisticMessage,
 }: {
-  chatId: string;
+  chat: Chat;
   messagesPromise: Promise<ClientMessage[]>;
   refetchMessages: () => void;
   onMessagesRead: (chatId: string) => void;
+  onOptimisticMessage: (message: ClientMessage) => {
+    confirm: () => void;
+    rollback: () => void;
+  };
 }) {
   const { currentUser } = useAuthUser();
   const { chatApi } = useChatApi();
@@ -287,7 +332,7 @@ function ChatMessages({
     failedMessages,
     saveFailedMessage: addFailedMessage,
     deleteFailedMessage: removeFailedMessage,
-  } = useFailedMessages(chatId);
+  } = useFailedMessages(chat.id);
 
   const [optimisticMessages, optimisticMessageDispatch] = useOptimistic(
     [...messages, ...failedMessages],
@@ -313,35 +358,52 @@ function ChatMessages({
 
   const addOptimisticMessage = (message: ClientMessage) => {
     optimisticMessageDispatch({ type: 'add', message });
-  };
-  const updateOptimisticMessage = (message: ClientMessage) => {
-    optimisticMessageDispatch({ type: 'update', message });
-  };
-  const removeOptimisticMessage = (message: ClientMessage) => {
-    optimisticMessageDispatch({ type: 'remove', message });
+
+    const { rollback: rollbackMessage, confirm: confirmMessage } =
+      onOptimisticMessage(message);
+
+    const rollback = () => {
+      optimisticMessageDispatch({ type: 'remove', message });
+      rollbackMessage();
+    };
+
+    const confirm = () => {
+      optimisticMessageDispatch({
+        type: 'update',
+        message: { ...message, sending: false },
+      });
+      confirmMessage();
+    };
+
+    return { rollback, confirm };
   };
 
   const sendMessageAction = async (content: string) => {
     const optimisticMessage = createOptimisticMessage(
       content,
       currentUser,
-      chatId,
+      chat.id,
     );
 
-    addOptimisticMessage(optimisticMessage);
+    const { rollback, confirm } = addOptimisticMessage(optimisticMessage);
 
     try {
-      await chatApi.sendMessage(chatId, content);
+      await chatApi.sendMessage(chat.id, content);
 
-      updateOptimisticMessage({ ...optimisticMessage, sending: false });
+      confirm();
 
       startTransition(() => {
         refetchMessages();
       });
     } catch {
+      rollback();
+
       startTransition(() => {
-        removeOptimisticMessage(optimisticMessage);
-        addFailedMessage({ ...optimisticMessage, error: true, sending: false });
+        addFailedMessage({
+          ...optimisticMessage,
+          error: true,
+          sending: false,
+        });
       });
     }
   };
@@ -359,8 +421,8 @@ function ChatMessages({
   };
 
   useEffect(() => {
-    onMessagesRead(chatId);
-  }, [chatId, onMessagesRead]);
+    onMessagesRead(chat.id);
+  }, [chat.id, onMessagesRead]);
 
   useLayoutEffect(() => {
     viewportRef.current?.scroll({
@@ -411,7 +473,7 @@ ChatMessages.Error = function ChatMessagesError() {
 function ChatBox() {
   const { chatId } = useParams<{ chatId: string }>();
   const { chatApi } = useChatApi();
-  const { chats, markChatAsReadAction } =
+  const { chats, markChatAsReadAction, updateChatAction } =
     useOutletContext<ChatDashboardOutletContext>();
   const chat = chats.find((c) => c.id === chatId);
 
@@ -432,6 +494,18 @@ function ChatBox() {
     setMessagesPromise(chatApi.getChatMessages(chatId!));
   };
 
+  const onMessagesRead = () => {
+    markChatAsReadAction(chatId!);
+  };
+
+  const onOptimisticMessage = (message: ClientMessage) => {
+    const { confirm, rollback } = updateChatAction({
+      ...chat,
+      lastMessage: message,
+    });
+    return { confirm, rollback };
+  };
+
   return (
     chatId &&
     messagesPromise && (
@@ -439,10 +513,11 @@ function ChatBox() {
         <Suspense fallback={<ChatMessages.Loading />}>
           {
             <ChatMessages
-              chatId={chatId}
+              chat={chat}
               messagesPromise={messagesPromise}
               refetchMessages={refetchMessages}
-              onMessagesRead={markChatAsReadAction}
+              onMessagesRead={onMessagesRead}
+              onOptimisticMessage={onOptimisticMessage}
             />
           }
         </Suspense>

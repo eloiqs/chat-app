@@ -61,6 +61,12 @@ export function useFailedMessages(chatId: string) {
     () => getFailedMessagesFromStorage(currentUser.id, chatId),
   );
 
+  useEffect(() => {
+    setFailedMessagesState(
+      getFailedMessagesFromStorage(currentUser.id, chatId),
+    );
+  }, [chatId]);
+
   const setFailedMessages = (
     updater: ClientMessage[] | ((prev: ClientMessage[]) => ClientMessage[]),
   ) => {

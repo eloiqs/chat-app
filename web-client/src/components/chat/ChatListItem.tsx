@@ -1,9 +1,9 @@
-import { Link, NavLink, useMatch } from 'react-router-dom';
-import type { Chat } from 'shared';
-import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useLayoutEffect, useRef } from 'react';
+import { NavLink, useMatch } from 'react-router-dom';
+import type { Chat } from 'shared';
 
 const formatTimestamp = (timestamp?: string) => {
   if (!timestamp) return '';
