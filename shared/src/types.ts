@@ -17,7 +17,7 @@ export interface Chat {
   name?: string;
   participants: User[];
   lastMessage?: Message;
-  unreadCount?: number;
+  unreadCount: number;
 }
 
 // WebSocket event types
