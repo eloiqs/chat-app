@@ -6,16 +6,19 @@ import {
 } from '@/contexts/AuthContext';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { UserSelectionPage } from '@/pages/UserSelectionPage';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from '@tanstack/react-query';
 import { LogOut, Send } from 'lucide-react';
 import {
-  startTransition,
   Suspense,
-  use,
   useEffect,
   useLayoutEffect,
-  useOptimistic,
   useRef,
-  useState,
   type ReactNode,
 } from 'react';
 import {
@@ -24,7 +27,6 @@ import {
   Outlet,
   Route,
   Routes,
-  useOutletContext,
   useParams,
 } from 'react-router-dom';
 import type { Chat, User } from 'shared';
@@ -36,7 +38,10 @@ import { Button } from './components/ui/button';
 import { Card } from './components/ui/card';
 import { Input } from './components/ui/input';
 import { ScrollArea } from './components/ui/scroll-area';
-import { useFailedMessages } from './hooks/useFailedMessages';
+import {
+  FailedMessagesProvider,
+  useFailedMessages,
+} from './hooks/useFailedMessages';
 import type { ClientMessage } from './types/types';
 
 function ChatList({ chats, className }: { chats: Chat[]; className?: string }) {
@@ -95,126 +100,98 @@ function ChatDasboardLayout({ children }: { children: ReactNode }) {
   );
 }
 
-type ChatDashboardOutletContext = {
-  chats: Chat[];
-  markChatAsReadAction: (chatId: string) => void;
-  updateChatAction: (chat: Chat) => {
-    confirm: () => void;
-    rollback: () => void;
-  };
-};
-
-function ChatDashboard({
-  chatsPromise,
-  refetchChats,
-}: {
-  chatsPromise: Promise<Chat[]>;
-  refetchChats: () => void;
-}) {
-  const { chatId } = useParams<{ chatId: string }>();
+function useChats() {
   const { chatApi } = useChatApi();
-  const chats = use(chatsPromise);
+  const { data, ...query } = useSuspenseQuery<Chat[]>({
+    queryKey: ['chats'],
+    queryFn: chatApi.getAllChats,
+  });
 
-  const [optimisticChats, optimisticChatDispatch] = useOptimistic(
-    chats,
-    (
-      state,
-      action:
-        | { type: 'markAsRead'; chat: Chat }
-        | { type: 'update'; chat: Chat },
-    ) => {
-      switch (action.type) {
-        case 'markAsRead':
-          return state.map((c) =>
-            c.id === action.chat.id ? { ...c, unreadCount: 0 } : c,
-          );
-        case 'update':
-          return state.map((c) => (c.id === action.chat.id ? action.chat : c));
-      }
+  return { chats: data, ...query };
+}
+
+function useMarkChatAsRead({ chatId }: { chatId: string }) {
+  const { chatApi } = useChatApi();
+  const queryClient = useQueryClient();
+
+  const { chats } = useChats();
+
+  const { mutateAsync, ...mutation } = useMutation({
+    mutationFn: chatApi.markChatAsRead,
+    onMutate: () => {
+      const originalChat = chats.find((c) => c.id === chatId);
+      queryClient.setQueryData(['chats'], (state: Chat[]) => {
+        return state.map((chat) =>
+          chat.id === chatId ? { ...chat, unreadCount: 0 } : chat,
+        );
+      });
+      return { originalChat };
     },
-  );
-
-  const markChatAsRead = (chat: Chat) => {
-    optimisticChatDispatch({
-      type: 'markAsRead',
-      chat,
-    });
-    return () => {
-      optimisticChatDispatch({
-        type: 'update',
-        chat,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chats'] });
+    },
+    onError: (_error, _variables, context) => {
+      if (!context?.originalChat) return;
+      queryClient.setQueryData(['chats'], (state: Chat[]) => {
+        return state.map((chat) =>
+          chat.id === chatId ? { ...context.originalChat } : chat,
+        );
       });
-    };
-  };
+    },
+  });
 
-  const updateChat = (chat: Chat) => {
-    const originalChat = optimisticChats.find((c) => c.id === chat.id);
-    optimisticChatDispatch({
-      type: 'update',
-      chat,
+  return [mutateAsync, mutation] as const;
+}
+
+function useOptimisticChatUpdate() {
+  const queryClient = useQueryClient();
+
+  return (chat: Chat) => {
+    const originalChat = queryClient
+      .getQueryData<Chat[]>(['chats'])
+      ?.find((c) => c.id === chat.id);
+    if (!originalChat) return;
+
+    queryClient.setQueryData(['chats'], (state: Chat[]) => {
+      return state.map((c: Chat) => (c.id === chat.id ? { ...c, ...chat } : c));
     });
-    return () => {
-      optimisticChatDispatch({
-        type: 'update',
-        chat: originalChat!,
-      });
-    };
-  };
 
-  if (!chatId && chats.length > 0) {
+    return {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['chats'] });
+      },
+      onError: () => {
+        queryClient.setQueryData(['chats'], (state: Chat[]) => {
+          return state.map((c: Chat) =>
+            c.id === chat.id ? { ...originalChat } : c,
+          );
+        });
+      },
+    } as const;
+  };
+}
+
+function ChatDashboard() {
+  const { chatId } = useParams<{ chatId: string }>();
+  const { chats } = useChats();
+
+  if (chats.length === 0) {
+    return (
+      <div className="text-center text-muted-foreground py-12">
+        <p>No chats yet</p>
+      </div>
+    );
+  }
+
+  if (!chatId) {
     return <Navigate to={`/chat/${chats[0].id}`} />;
   }
 
-  const markChatAsReadAction = (chatId: string) => {
-    const chat = optimisticChats.find((c) => c.id === chatId);
-    if (!chat || chat.unreadCount === 0) return;
-    startTransition(async () => {
-      const rollback = markChatAsRead(chat);
-      try {
-        await chatApi.markChatAsRead(chatId);
-
-        startTransition(() => {
-          refetchChats();
-        });
-      } catch {
-        rollback();
-      }
-    });
-  };
-
-  const updateChatAction = (chat: Chat) => {
-    const originalChat = optimisticChats.find((c) => c.id === chat.id);
-    updateChat(chat);
-
-    const confirm = () => {
-      startTransition(() => {
-        refetchChats();
-      });
-    };
-
-    const rollback = () => {
-      optimisticChatDispatch({
-        type: 'update',
-        chat: originalChat!,
-      });
-    };
-
-    return { confirm, rollback };
-  };
-
   return (
     <div className="flex gap-4 h-full">
-      <ChatList className="w-80" chats={optimisticChats} />
+      <ChatList className="w-80" chats={chats} />
       <div className="flex-1 min-w-0 flex flex-col">
-        <Outlet
-          context={
-            {
-              chats: optimisticChats,
-              markChatAsReadAction,
-              updateChatAction,
-            } satisfies ChatDashboardOutletContext
-          }
-        />
+        <Outlet />
       </div>
     </div>
   );
@@ -237,21 +214,11 @@ ChatDashboard.Error = function ChatDashboardError() {
 };
 
 function ChatDashboardPage() {
-  const { chatApi } = useChatApi();
-  const [chatPromise, setChatPromise] = useState(() => chatApi.getAllChats());
-
-  const refetchChats = () => {
-    setChatPromise(chatApi.getAllChats());
-  };
-
   return (
     <ChatDasboardLayout>
       <ErrorBoundary fallback={<ChatDashboard.Error />}>
         <Suspense fallback={<ChatDashboard.Loading />}>
-          <ChatDashboard
-            chatsPromise={chatPromise}
-            refetchChats={refetchChats}
-          />
+          <ChatDashboard />
         </Suspense>
       </ErrorBoundary>
     </ChatDasboardLayout>
@@ -261,7 +228,7 @@ function ChatDashboardPage() {
 export function MessageInput({
   sendMessageAction,
 }: {
-  sendMessageAction: (content: string) => Promise<void>;
+  sendMessageAction: (content: string) => Promise<ClientMessage>;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -270,7 +237,7 @@ export function MessageInput({
     if (message && typeof message === 'string' && message.trim()) {
       formRef.current?.reset();
 
-      await sendMessageAction(message.trim());
+      sendMessageAction(message.trim());
     }
   };
 
@@ -287,6 +254,19 @@ export function MessageInput({
       </Button>
     </form>
   );
+}
+
+function useMessages({ chatId }: { chatId: string }) {
+  const { chatApi } = useChatApi();
+
+  const { data, ...query } = useSuspenseQuery<ClientMessage[]>({
+    queryKey: ['messages', chatId],
+    queryFn: () => chatApi.getChatMessages(chatId),
+  });
+
+  const { failedMessages } = useFailedMessages(chatId);
+
+  return { messages: [...data, ...failedMessages], ...query } as const;
 }
 
 function createOptimisticMessage(
@@ -307,150 +287,129 @@ function createOptimisticMessage(
   };
 }
 
-function ChatMessages({
-  chat,
-  messagesPromise,
-  refetchMessages,
-  onMessagesRead,
-  onOptimisticMessage,
+function useSendMessage({
+  chatId,
+  onMutate,
 }: {
-  chat: Chat;
-  messagesPromise: Promise<ClientMessage[]>;
-  refetchMessages: () => void;
-  onMessagesRead: (chatId: string) => void;
-  onOptimisticMessage: (message: ClientMessage) => {
-    confirm: () => void;
-    rollback: () => void;
-  };
-}) {
-  const { currentUser } = useAuthUser();
-  const { chatApi } = useChatApi();
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const messages = use(messagesPromise);
-
-  const {
-    failedMessages,
-    saveFailedMessage: addFailedMessage,
-    deleteFailedMessage: removeFailedMessage,
-  } = useFailedMessages(chat.id);
-
-  const [optimisticMessages, optimisticMessageDispatch] = useOptimistic(
-    [...messages, ...failedMessages],
-    (
-      state,
-      action: { type: 'add' | 'remove' | 'update'; message: ClientMessage },
-    ) => {
-      switch (action.type) {
-        case 'add': {
-          const messages = state.filter((m) => !m.error);
-          const failedMessages = state.filter((m) => m.error);
-          return [...messages, action.message, ...failedMessages];
-        }
-        case 'update':
-          return state.map((m) =>
-            m.id === action.message.id ? action.message : m,
-          );
-        case 'remove':
-          return state.filter((m) => m.id !== action.message.id);
+  chatId: string;
+  onMutate: (message: ClientMessage) =>
+    | {
+        onSuccess?: () => void;
+        onError?: () => void;
       }
+    | undefined;
+}) {
+  const { chatApi } = useChatApi();
+  const { currentUser } = useAuthUser();
+  const queryClient = useQueryClient();
+  const { failedMessages, saveFailedMessage, deleteFailedMessage } =
+    useFailedMessages(chatId);
+
+  const { mutateAsync, ...mutation } = useMutation({
+    mutationFn: (content: string) => chatApi.sendMessage(chatId, content),
+    onMutate: (content) => {
+      const message = createOptimisticMessage(content, currentUser, chatId);
+      queryClient.setQueryData(
+        ['messages', chatId],
+        (state: ClientMessage[] = []) => {
+          return state.concat([message]);
+        },
+      );
+      const updatable = onMutate(message);
+      return {
+        message,
+        onSuccess: updatable?.onSuccess,
+        onError: updatable?.onError,
+      };
     },
-  );
+    onSuccess: (_message, _content, context) => {
+      queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
+      context.onSuccess?.();
+    },
+    onError: (_error, _content, context) => {
+      if (!context?.message) return;
+      queryClient.setQueryData(
+        ['messages', chatId],
+        (state: ClientMessage[]) => {
+          if (!context?.message) return state;
+          return state.filter((m) => m.id !== context.message.id);
+        },
+      );
+      saveFailedMessage({ ...context.message, error: true, sending: false });
+      context?.onError?.();
+    },
+  });
 
-  const addOptimisticMessage = (message: ClientMessage) => {
-    optimisticMessageDispatch({ type: 'add', message });
-
-    const { rollback: rollbackMessage, confirm: confirmMessage } =
-      onOptimisticMessage(message);
-
-    const rollback = () => {
-      optimisticMessageDispatch({ type: 'remove', message });
-      rollbackMessage();
-    };
-
-    const confirm = () => {
-      optimisticMessageDispatch({
-        type: 'update',
-        message: { ...message, sending: false },
-      });
-      confirmMessage();
-    };
-
-    return { rollback, confirm };
+  const retry = (messageId: string) => {
+    const failedMessage = cancel(messageId);
+    if (!failedMessage) return;
+    return mutateAsync(failedMessage.content);
   };
 
-  const sendMessageAction = async (content: string) => {
-    const optimisticMessage = createOptimisticMessage(
-      content,
-      currentUser,
-      chat.id,
-    );
+  const cancel = (messageId: string) => {
+    const failedMessage = failedMessages.find((m) => m.id === messageId);
+    if (!failedMessage) return;
+    deleteFailedMessage(messageId);
+    return failedMessage;
+  };
 
-    const { rollback, confirm } = addOptimisticMessage(optimisticMessage);
+  return [mutateAsync, { ...mutation, retry, cancel }] as const;
+}
 
-    try {
-      await chatApi.sendMessage(chat.id, content);
+function ChatMessages({ chat }: { chat: Chat }) {
+  const viewportRef = useRef<HTMLDivElement>(null);
 
-      confirm();
+  const { messages } = useMessages({ chatId: chat.id });
 
-      startTransition(() => {
-        refetchMessages();
-      });
-    } catch {
-      rollback();
+  const [markChatAsRead] = useMarkChatAsRead({ chatId: chat.id });
 
-      startTransition(() => {
-        addFailedMessage({
-          ...optimisticMessage,
-          error: true,
-          sending: false,
+  const updateChat = useOptimisticChatUpdate();
+
+  const [sendMessage, { retry: retrySendMessage, cancel: cancelSendMessage }] =
+    useSendMessage({
+      chatId: chat.id,
+      onMutate: (message) => {
+        const updatable = updateChat({
+          ...chat,
+          lastMessage: message,
         });
-      });
-    }
-  };
-
-  const retryMessage = (messageId: string, content: string) => {
-    removeFailedMessage(messageId);
-
-    startTransition(async () => {
-      await sendMessageAction(content);
+        if (!updatable) return;
+        return updatable;
+      },
     });
-  };
-
-  const deleteMessage = (messageId: string) => {
-    removeFailedMessage(messageId);
-  };
 
   useEffect(() => {
-    onMessagesRead(chat.id);
-  }, [chat.id, onMessagesRead]);
+    if (!chat.unreadCount) return;
+    markChatAsRead(chat.id);
+  }, [chat.id, chat.unreadCount, markChatAsRead]);
 
   useLayoutEffect(() => {
     viewportRef.current?.scroll({
       behavior: 'instant',
       top: viewportRef.current.scrollHeight,
     });
-  }, [optimisticMessages.length]);
+  }, [messages.length]);
 
   return (
     <Card className="flex-1 flex flex-col overflow-hidden">
       <ScrollArea className="flex-1 p-4" viewportRef={viewportRef}>
-        {optimisticMessages.map((message) => (
+        {messages.map((message) => (
           <MessageBubble
             key={message.id}
             message={message}
-            onRetry={message.error ? retryMessage : undefined}
-            onDelete={message.error ? deleteMessage : undefined}
+            onRetry={message.error ? retrySendMessage : undefined}
+            onDelete={message.error ? cancelSendMessage : undefined}
           />
         ))}
 
-        {optimisticMessages.length === 0 && (
+        {messages.length === 0 && (
           <div className="text-center text-muted-foreground py-12">
             <p>No messages yet. Start the conversation!</p>
           </div>
         )}
       </ScrollArea>
       <div className="border-t p-4">
-        <MessageInput sendMessageAction={sendMessageAction} />
+        <MessageInput sendMessageAction={sendMessage} />
       </div>
     </Card>
   );
@@ -470,60 +429,30 @@ ChatMessages.Error = function ChatMessagesError() {
   );
 };
 
-function ChatBox() {
+function ChatBox({ chat }: { chat: Chat }) {
+  return (
+    <ErrorBoundary fallback={<ChatMessages.Error />}>
+      <Suspense fallback={<ChatMessages.Loading />}>
+        <ChatMessages chat={chat} />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+
+function ChatBoxOutlet() {
   const { chatId } = useParams<{ chatId: string }>();
-  const { chatApi } = useChatApi();
-  const { chats, markChatAsReadAction, updateChatAction } =
-    useOutletContext<ChatDashboardOutletContext>();
+  const { chats } = useChats();
   const chat = chats.find((c) => c.id === chatId);
 
-  const [messagesPromise, setMessagesPromise] =
-    useState<Promise<ClientMessage[]>>();
-
-  useEffect(() => {
-    startTransition(() => {
-      setMessagesPromise(chatApi.getChatMessages(chatId!));
-    });
-  }, [chatId, chatApi]);
-
   if (!chat) {
-    return <ChatMessages.Error />;
+    return (
+      <div className="max-w-2xl mx-auto text-center py-12">
+        <p className="text-muted-foreground mb-2">Chat not found</p>
+      </div>
+    );
   }
 
-  const refetchMessages = () => {
-    setMessagesPromise(chatApi.getChatMessages(chatId!));
-  };
-
-  const onMessagesRead = () => {
-    markChatAsReadAction(chatId!);
-  };
-
-  const onOptimisticMessage = (message: ClientMessage) => {
-    const { confirm, rollback } = updateChatAction({
-      ...chat,
-      lastMessage: message,
-    });
-    return { confirm, rollback };
-  };
-
-  return (
-    chatId &&
-    messagesPromise && (
-      <ErrorBoundary fallback={<ChatMessages.Error />}>
-        <Suspense fallback={<ChatMessages.Loading />}>
-          {
-            <ChatMessages
-              chat={chat}
-              messagesPromise={messagesPromise}
-              refetchMessages={refetchMessages}
-              onMessagesRead={onMessagesRead}
-              onOptimisticMessage={onOptimisticMessage}
-            />
-          }
-        </Suspense>
-      </ErrorBoundary>
-    )
-  );
+  return <ChatBox chat={chat} />;
 }
 
 function AppRoutes() {
@@ -537,18 +466,24 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to="/chat" />} />
       <Route path="/chat" element={<ChatDashboardPage />}>
-        <Route path=":chatId?" element={<ChatBox />} />
+        <Route path=":chatId?" element={<ChatBoxOutlet />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }
 
+const queryClient = new QueryClient();
+
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <QueryClientProvider client={queryClient}>
+          <FailedMessagesProvider>
+            <AppRoutes />
+          </FailedMessagesProvider>
+        </QueryClientProvider>
       </AuthProvider>
     </BrowserRouter>
   );
