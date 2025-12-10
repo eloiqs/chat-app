@@ -31,11 +31,11 @@ export interface MessageView {
 
 @Injectable()
 export class ChatService {
-  private chatGateway?: ChatGateway;
-
-  setChatGateway(gateway: ChatGateway) {
-    this.chatGateway = gateway;
-  }
+  // private chatGateway?: ChatGateway;
+  //
+  // setChatGateway(gateway: ChatGateway) {
+  //   this.chatGateway = gateway;
+  // }
 
   private users: User[] = [
     { id: 'u1', name: 'John Doe', avatar: 'JD' },
@@ -338,9 +338,9 @@ export class ChatService {
     const sharedMessage = this.toSharedMessage(newMessage);
 
     // Broadcast the new message to all users in the chat via WebSocket
-    if (this.chatGateway) {
-      this.chatGateway.broadcastNewMessage(chatId, sharedMessage);
-    }
+    // if (this.chatGateway) {
+    //   this.chatGateway.broadcastNewMessage(chatId, sharedMessage);
+    // }
 
     return sharedMessage;
   }

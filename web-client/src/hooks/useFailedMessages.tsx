@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, use, type ReactNode } from 'react';
 import type { ClientMessage } from '@/types/types';
-import { useAuth, useAuthUser } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useCurrentUser } from '@/contexts/UserProvider';
 
 const STORAGE_KEY_PREFIX = 'chat-failed-messages';
 
@@ -80,7 +81,7 @@ function useFailedMessagesContext() {
 }
 
 export function FailedMessagesProvider({ children }: { children: ReactNode }) {
-  const { currentUser } = useAuthUser();
+  const { currentUser } = useCurrentUser();
   const { onLogout } = useAuth();
 
   const [failedMessagesByChatId, setFailedMessagesState] = useState<
@@ -136,7 +137,7 @@ export function FailedMessagesProvider({ children }: { children: ReactNode }) {
 }
 
 export function useFailedMessages(chatId: string) {
-  const { currentUser } = useAuthUser();
+  const { currentUser } = useCurrentUser();
   const {
     failedMessagesByChatId,
     setFailedMessagesState,

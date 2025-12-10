@@ -39,7 +39,7 @@ export class ChatGateway
   constructor(private readonly chatService: ChatService) {}
 
   afterInit() {
-    this.chatService.setChatGateway(this);
+    // this.chatService.setChatGateway(this);
   }
 
   handleConnection(client: AuthenticatedSocket) {

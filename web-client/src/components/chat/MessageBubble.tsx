@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 import type { ClientMessage } from '@/types/types';
 import { Loader2, AlertCircle, X, RotateCcw } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useState } from 'react';
 
 export function MessageBubble({
@@ -13,7 +13,7 @@ export function MessageBubble({
   onRetry?: (messageId: string, content: string) => void;
   onDelete?: (messageId: string) => void;
 }) {
-  const [tooltipOpen, setTooltipOpen] = useState(false);
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
   const formatTime = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString('en-US', {
@@ -28,6 +28,7 @@ export function MessageBubble({
         'flex flex-col mb-4',
         message.isCurrentUser ? 'items-end' : 'items-start',
       )}
+      data-testid={`message-${message.id}`}
     >
       {!message.isCurrentUser && (
         <span className="text-xs text-muted-foreground mb-1 px-2">
@@ -49,22 +50,22 @@ export function MessageBubble({
       </div>
 
       {message.error ? (
-        <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
-          <TooltipTrigger asChild>
+        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+          <PopoverTrigger asChild>
             <button
               className="text-xs text-red-500 dark:text-red-400 mt-1 px-2 flex items-center gap-1 hover:text-red-600 dark:hover:text-red-300 cursor-pointer"
             >
               <AlertCircle className="h-3 w-3" />
               Not sent. Tap for options.
             </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="p-2 flex flex-col gap-1">
+          </PopoverTrigger>
+          <PopoverContent side="top" className="w-auto p-2 flex flex-col gap-1">
             <button
               onClick={() => {
                 onRetry?.(message.id, message.content);
-                setTooltipOpen(false);
+                setPopoverOpen(false);
               }}
-              className="flex items-center gap-2 px-3 py-2 hover:bg-background/20 rounded text-sm whitespace-nowrap"
+              className="flex items-center gap-2 px-3 py-2 hover:bg-accent rounded text-sm whitespace-nowrap"
             >
               <RotateCcw className="h-4 w-4" />
               Retry
@@ -73,16 +74,16 @@ export function MessageBubble({
               <button
                 onClick={() => {
                   onDelete(message.id);
-                  setTooltipOpen(false);
+                  setPopoverOpen(false);
                 }}
-                className="flex items-center gap-2 px-3 py-2 hover:bg-background/20 rounded text-sm whitespace-nowrap"
+                className="flex items-center gap-2 px-3 py-2 hover:bg-accent rounded text-sm whitespace-nowrap"
               >
                 <X className="h-4 w-4" />
                 Delete
               </button>
             )}
-          </TooltipContent>
-        </Tooltip>
+          </PopoverContent>
+        </Popover>
       ) : message.sending ? (
         <span className="text-xs text-muted-foreground mt-1 px-2 flex items-center gap-1">
           <Loader2 className="h-3 w-3 animate-spin" />

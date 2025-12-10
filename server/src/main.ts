@@ -7,12 +7,17 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   // Get CORS configuration from environment variables
-  const corsOrigins = configService.get<string>('CORS_ORIGINS', 'http://localhost:5173');
-  const corsCredentials = configService.get<string>('CORS_CREDENTIALS', 'true') === 'true';
+  const corsOrigins = configService.get<string>(
+    'CORS_ORIGINS',
+    'http://localhost:5173',
+  );
+  console.log('corsOrigins', corsOrigins);
+  const corsCredentials =
+    configService.get<string>('CORS_CREDENTIALS', 'true') === 'true';
 
   // Enable CORS for the web client
   app.enableCors({
-    origin: corsOrigins.split(',').map(origin => origin.trim()),
+    origin: corsOrigins.split(',').map((origin) => origin.trim()),
     credentials: corsCredentials,
   });
 

@@ -40,7 +40,12 @@ export function ChatListItem({
   }, [match, onMatch]);
 
   return (
-    <NavLink to={`/chat/${chat.id}`} className="block" ref={ref}>
+    <NavLink
+      to={`/chat/${chat.id}`}
+      className="block"
+      ref={ref}
+      data-testid={`chat-item-${chat.id}`}
+    >
       {({ isActive, isPending }) => (
         <Card
           className={cn(
@@ -91,8 +96,11 @@ export function ChatListItem({
               </p>
             </div>
 
-            {chat.unreadCount && chat.unreadCount > 0 && (
-              <div className="flex-shrink-0 bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium">
+            {(chat.unreadCount || null) && chat.unreadCount > 0 && (
+              <div
+                className="flex-shrink-0 bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium"
+                data-testid={`unread-badge-${chat.id}`}
+              >
                 {chat.unreadCount}
               </div>
             )}

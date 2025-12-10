@@ -1,9 +1,4 @@
-import {
-  AuthProvider,
-  useAuth,
-  useAuthUser,
-  useChatApi,
-} from '@/contexts/AuthContext';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { UserSelectionPage } from '@/pages/UserSelectionPage';
 import {
@@ -38,6 +33,8 @@ import { Button } from './components/ui/button';
 import { Card } from './components/ui/card';
 import { Input } from './components/ui/input';
 import { ScrollArea } from './components/ui/scroll-area';
+import { ChatApiProvider, useChatApi } from './contexts/ChatApiProvider';
+import { useCurrentUser, UserProvider } from './contexts/UserProvider';
 import {
   FailedMessagesProvider,
   useFailedMessages,
@@ -57,7 +54,11 @@ function ChatList({ chats, className }: { chats: Chat[]; className?: string }) {
         <div className="w-0 grow">
           <div className="space-y-3">
             {chats.map((chat) => (
-              <ChatListItem key={chat.id} chat={chat} onMatch={scrollToItem} />
+              <ChatListItem
+                key={chat.id + chat.unreadCount + chat.lastMessage}
+                chat={chat}
+                onMatch={scrollToItem}
+              />
             ))}
           </div>
 
@@ -74,7 +75,7 @@ function ChatList({ chats, className }: { chats: Chat[]; className?: string }) {
 
 function ChatDasboardLayout({ children }: { children: ReactNode }) {
   const { logout } = useAuth();
-  const { currentUser } = useAuthUser();
+  const { currentUser } = useCurrentUser();
 
   return (
     <AppLayout title="Chat">
@@ -85,7 +86,7 @@ function ChatDasboardLayout({ children }: { children: ReactNode }) {
               {currentUser.avatar || currentUser.name.slice(0, 2).toUpperCase()}
             </div>
             <div>
-              <p className="font-semibold">{currentUser.name}</p>
+              <p className="font-semibold" data-testid="current-user-name">{currentUser.name}</p>
               <p className="text-sm text-muted-foreground">Logged in</p>
             </div>
           </div>
@@ -120,6 +121,7 @@ function useMarkChatAsRead({ chatId }: { chatId: string }) {
     mutationFn: chatApi.markChatAsRead,
     onMutate: () => {
       const originalChat = chats.find((c) => c.id === chatId);
+      if (!originalChat) return;
       queryClient.setQueryData(['chats'], (state: Chat[]) => {
         return state.map((chat) =>
           chat.id === chatId ? { ...chat, unreadCount: 0 } : chat,
@@ -133,9 +135,9 @@ function useMarkChatAsRead({ chatId }: { chatId: string }) {
     onError: (_error, _variables, context) => {
       if (!context?.originalChat) return;
       queryClient.setQueryData(['chats'], (state: Chat[]) => {
-        return state.map((chat) =>
-          chat.id === chatId ? { ...context.originalChat } : chat,
-        );
+        return state.map((chat) => {
+          return chat.id === chatId ? { ...context.originalChat } : chat;
+        });
       });
     },
   });
@@ -300,7 +302,7 @@ function useSendMessage({
     | undefined;
 }) {
   const { chatApi } = useChatApi();
-  const { currentUser } = useAuthUser();
+  const { currentUser } = useCurrentUser();
   const queryClient = useQueryClient();
   const { failedMessages, saveFailedMessage, deleteFailedMessage } =
     useFailedMessages(chatId);
@@ -361,7 +363,9 @@ function ChatMessages({ chat }: { chat: Chat }) {
 
   const { messages } = useMessages({ chatId: chat.id });
 
-  const [markChatAsRead] = useMarkChatAsRead({ chatId: chat.id });
+  const [markChatAsRead, { error: markChatAsReadError }] = useMarkChatAsRead({
+    chatId: chat.id,
+  });
 
   const updateChat = useOptimisticChatUpdate();
 
@@ -379,7 +383,7 @@ function ChatMessages({ chat }: { chat: Chat }) {
     });
 
   useEffect(() => {
-    if (!chat.unreadCount) return;
+    if (!chat.unreadCount || markChatAsReadError) return;
     markChatAsRead(chat.id);
   }, [chat.id, chat.unreadCount, markChatAsRead]);
 
@@ -455,13 +459,47 @@ function ChatBoxOutlet() {
   return <ChatBox chat={chat} />;
 }
 
-function AppRoutes() {
+function AuthenticatedProviders({
+  currentUser,
+  children,
+}: {
+  currentUser: User;
+  children: ReactNode;
+}) {
+  return (
+    <UserProvider user={currentUser}>
+      <ChatApiProvider>
+        <FailedMessagesProvider>{children}</FailedMessagesProvider>
+      </ChatApiProvider>
+    </UserProvider>
+  );
+}
+
+function AppAuthGuard({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
 
   if (!currentUser) {
     return <UserSelectionPage />;
   }
 
+  return (
+    <AuthenticatedProviders currentUser={currentUser}>
+      {children}
+    </AuthenticatedProviders>
+  );
+}
+
+const queryClient = new QueryClient();
+
+function RootProviders({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>{children}</AuthProvider>
+    </QueryClientProvider>
+  );
+}
+
+function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/chat" />} />
@@ -473,18 +511,14 @@ function AppRoutes() {
   );
 }
 
-const queryClient = new QueryClient();
-
 function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <QueryClientProvider client={queryClient}>
-          <FailedMessagesProvider>
-            <AppRoutes />
-          </FailedMessagesProvider>
-        </QueryClientProvider>
-      </AuthProvider>
+      <RootProviders>
+        <AppAuthGuard>
+          <AppRoutes />
+        </AppAuthGuard>
+      </RootProviders>
     </BrowserRouter>
   );
 }

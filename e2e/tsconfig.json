@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "paths": {
+      "@fixtures/*": ["./fixtures/*"],
+      "@helpers/*": ["./helpers/*"],
+      "@pages/*": ["./page-objects/*"]
+    }
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules"]
+}

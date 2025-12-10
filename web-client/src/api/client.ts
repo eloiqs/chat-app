@@ -3,6 +3,7 @@ import type * as Shared from 'shared';
 import { toMessage } from './utils';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL + '/api';
+console.log('API_BASE_URL', API_BASE_URL);
 
 export interface ChatApiClient {
   getAllChats(): Promise<Shared.Chat[]>;

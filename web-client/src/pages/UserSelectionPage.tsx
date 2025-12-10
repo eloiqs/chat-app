@@ -40,7 +40,7 @@ export function UserSelection({
 
       <div className="grid gap-4">
         {users.map((user) => (
-          <Card key={user.id} className="p-6">
+          <Card key={user.id} className="p-6" data-testid={`user-card-${user.id}`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-lg font-semibold">

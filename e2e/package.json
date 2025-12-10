@@ -1,0 +1,22 @@
+{
+  "name": "e2e",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:chromium": "playwright test --project=chromium",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^22.0.0",
+    "shared": "*",
+    "typescript": "~5.9.3"
+  },
+  "dependencies": {
+    "get-port": "^7.1.0",
+    "tree-kill": "^1.2.2"
+  }
+}
