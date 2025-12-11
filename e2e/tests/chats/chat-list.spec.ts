@@ -1,6 +1,11 @@
-import { test, expect, TestUsers, API_ROUTES } from '../../fixtures/test-fixtures';
+import { RouteController } from 'playwright-route-controller';
+import {
+  test,
+  expect,
+  TestUsers,
+  API_ROUTES,
+} from '../../fixtures/test-fixtures';
 import { TestChats, JohnsChatIds } from '../../data/test-data';
-import { RouteController } from '../../utils/route-controller';
 
 test.describe('View Chats List', () => {
   test('should display chat list after login', async ({
@@ -35,9 +40,7 @@ test.describe('View Chats List', () => {
     page,
   }) => {
     // Chat with Alice shows last message
-    await expect(
-      page.getByText(TestChats.johnAlice.lastMessage),
-    ).toBeVisible();
+    await expect(page.getByText(TestChats.johnAlice.lastMessage)).toBeVisible();
   });
 
   test('should auto-redirect to first chat', async ({
@@ -101,15 +104,19 @@ test.describe('View Chats List', () => {
 
     await chatDashboardPage.expectUnreadBadgeVisible(bobChatId);
 
-    const controller = new RouteController();
-    await page.route(API_ROUTES.CHAT_READ, (route) => controller.handle(route));
+    const controller = new RouteController({
+      method: 'POST',
+      match: (req) => req.url().includes(bobChatId),
+    });
+    await page.route(API_ROUTES.CHAT_READ, (route) => {
+      return controller.handle(route);
+    });
 
     // Select chat -> triggers optimistic update (badge hidden)
     await chatDashboardPage.selectChatById(bobChatId);
     await chatDashboardPage.expectUnreadBadgeHidden(bobChatId);
 
-    // Wait for request to be intercepted, then abort -> should rollback (badge visible)
-    await controller.waitForPending();
+    // abort -> should rollback (badge visible)
     controller.abort();
     await chatDashboardPage.expectUnreadBadgeVisible(bobChatId);
 

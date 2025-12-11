@@ -8,7 +8,9 @@ export class ChatDashboardPage {
 
   constructor(public readonly page: Page) {
     this.currentUserName = page.getByTestId('current-user-name');
-    this.logoutButton = page.getByRole('button', { name: UI_TEXT.BUTTON_LOGOUT });
+    this.logoutButton = page.getByRole('button', {
+      name: UI_TEXT.BUTTON_LOGOUT,
+    });
     this.loadingChats = page.getByText(UI_TEXT.LOADING_CHATS);
   }
 
@@ -28,7 +30,7 @@ export class ChatDashboardPage {
   }
 
   getChatItem(chatId: string): Locator {
-    return this.page.locator(`[data-testid^="chat-item-${chatId}"]`);
+    return this.page.getByTestId(`chat-item-${chatId}`);
   }
 
   getChatItems(): Locator {
@@ -40,7 +42,7 @@ export class ChatDashboardPage {
   }
 
   getUnreadBadge(chatId: string): Locator {
-    return this.getChatItem(chatId).locator('[data-testid^="unread-badge-"]');
+    return this.page.getByTestId(`unread-badge-${chatId}`);
   }
 
   async logout(): Promise<void> {

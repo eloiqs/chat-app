@@ -102,7 +102,11 @@ function spawnClient(port: number, apiPort: number, cwd: string): ChildProcess {
     ['run', 'dev', '--workspace=web-client', '--', '--port', String(port)],
     {
       cwd,
-      env: { ...process.env, VITE_API_URL: `http://localhost:${apiPort}` },
+      env: {
+        ...process.env,
+        NODE_ENV: 'production',
+        VITE_API_URL: `http://localhost:${apiPort}`,
+      },
       stdio: 'pipe',
       shell: true,
     },

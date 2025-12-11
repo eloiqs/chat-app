@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "get-port": "^7.1.0",
+    "playwright-route-controller": "^0.3.0",
     "tree-kill": "^1.2.2"
   }
 }

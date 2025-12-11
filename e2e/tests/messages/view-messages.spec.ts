@@ -1,5 +1,11 @@
-import { test, expect, TestUsers } from '../../fixtures/test-fixtures';
+import {
+  test,
+  expect,
+  TestUsers,
+  API_ROUTES,
+} from '../../fixtures/test-fixtures';
 import { TestChats } from '../../data/test-data';
+import { RouteController } from 'playwright-route-controller';
 
 test.describe('View Messages', () => {
   test('should display messages when selecting a chat', async ({
@@ -40,16 +46,24 @@ test.describe('View Messages', () => {
     authenticatedAsJohn,
     chatDashboardPage,
     page,
+    serverProcess,
   }) => {
     await chatDashboardPage.waitForChatsToLoad();
 
+    const controller = new RouteController({
+      method: 'POST',
+      match: (req) => req.url().includes(TestChats.johnBob.id),
+    });
+    await page.route(API_ROUTES.CHAT_READ, (route) => controller.handle(route));
+
     // Bob's chat has unread messages
+    await chatDashboardPage.expectOnChatRoute(TestChats.johnAlice.id);
     await chatDashboardPage.expectUnreadBadgeVisible(TestChats.johnBob.id);
 
     await chatDashboardPage.selectChatById(TestChats.johnBob.id);
-    await page.waitForTimeout(500); // Wait for API call
 
     // Badge should disappear after viewing
+    await controller.continueAll();
     await chatDashboardPage.expectUnreadBadgeHidden(TestChats.johnBob.id);
   });
 });
