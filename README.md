@@ -1,145 +1,156 @@
-# React Data Fetching with NestJS Backend
+# React Data Fetching Chat App
 
-A monorepo project with a React frontend (web-client) and NestJS backend (server) for demonstrating data fetching patterns in a chat application.
+A real-time chat application demonstrating modern React data fetching patterns with TanStack Query, optimistic updates, and WebSocket integration.
+
+## Features
+
+- Real-time messaging with Socket.IO
+- Optimistic updates for instant UI feedback
+- Failed message recovery with retry/cancel
+- Unread message tracking
+- Typing indicators
+- Multi-user support with isolated sessions
+
+## Tech Stack
+
+**Frontend**
+- React 19 with Vite
+- TanStack Query for server state management
+- Tailwind CSS 4 with Radix UI components
+- React Router DOM for navigation
+- Socket.IO client for real-time features
+
+**Backend**
+- NestJS with Express
+- Socket.IO for WebSocket support
+- In-memory data store (mock data)
+
+**Testing**
+- Playwright for end-to-end tests
+- Page Object pattern with custom fixtures
 
 ## Project Structure
 
 ```
-.
-├── web-client/          # React + TypeScript + Vite frontend
-│   ├── src/
-│   │   ├── api/         # API client for server communication
-│   │   ├── components/  # React components
-│   │   ├── pages/       # Page components
-│   │   └── types/       # TypeScript type definitions
-│   └── package.json
-├── server/              # NestJS backend
-│   ├── src/
-│   │   ├── chat/        # Chat module (controller & service)
-│   │   ├── app.module.ts
-│   │   └── main.ts
-│   └── package.json
-└── package.json         # Root workspace configuration
+├── web-client/     # React frontend
+├── server/         # NestJS backend
+├── shared/         # Shared TypeScript types
+└── e2e/            # Playwright tests
 ```
 
 ## Getting Started
 
-### Install Dependencies
+### Prerequisites
+
+- Node.js 18+
+- npm 9+
+
+### Installation
 
 ```bash
 npm install
 ```
 
-This will install dependencies for both the web-client and server packages.
-
 ### Development
 
-Run both the frontend and backend simultaneously:
+Start both the client and server:
 
 ```bash
 npm run dev:all
 ```
 
-Or run them separately:
+Or start them separately:
 
 ```bash
-# Run only the web-client (frontend)
-npm run dev
-
-# Run only the server (backend)
+# Terminal 1 - Start the server
 npm run dev:server
+
+# Terminal 2 - Start the client
+npm run dev
 ```
 
-The web-client will be available at `http://localhost:5173` and the server at `http://localhost:3000`.
+The client runs at `http://localhost:5173` and the server at `http://localhost:3000`.
 
-### Build
+### Environment Variables
 
-Build both packages:
+Copy the example environment file for the server:
 
 ```bash
-npm run build
+cp server/.env.example server/.env
 ```
 
-## Tech Stack
+Available variables:
 
-### Web Client
-- React 19
-- TypeScript
-- Vite
-- React Router
-- Tailwind CSS
-- Radix UI components
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | Server port | `3000` |
+| `CORS_ORIGINS` | Comma-separated allowed origins | `http://localhost:5173` |
+| `CORS_CREDENTIALS` | Allow credentials in CORS | `true` |
 
-### Server
-- NestJS
-- TypeScript
-- Express
+## Scripts
 
-## Features
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start web client |
+| `npm run dev:server` | Start NestJS server |
+| `npm run dev:all` | Start both client and server |
+| `npm run build` | Build all workspaces |
+| `npm run lint` | Lint all workspaces |
+| `npm run test:e2e` | Run Playwright tests |
+| `npm run test:e2e:ui` | Run tests with Playwright UI |
+| `npm run test:e2e:headed` | Run tests in headed browser |
 
-- Chat list with real-time data fetching
-- Individual chat views with message history
-- RESTful API for chat data
-- CORS enabled for cross-origin requests
-- Type-safe API client
+## Architecture Highlights
 
-## Expanding the ESLint configuration
+### Optimistic Updates
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Messages are immediately shown in the UI while the API request is in flight. On failure, messages are moved to a "failed" state with retry/cancel options.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
+```tsx
+const { mutateAsync } = useMutation({
+  mutationFn: (content) => chatApi.sendMessage(chatId, content),
+  onMutate: (content) => {
+    // Add optimistic message to cache
+    queryClient.setQueryData(['messages', chatId], (old) => [...old, optimisticMessage]);
   },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
+  onError: (error, content, context) => {
+    // Remove optimistic message, save to failed messages
   },
-])
+});
 ```
+
+### Failed Message Recovery
+
+Failed messages are persisted to localStorage and displayed with error styling. Users can retry sending or delete the message.
+
+### Real-time Updates
+
+Socket.IO handles typing indicators and message broadcasts. Users join chat rooms to receive updates only for active conversations.
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/chats` | Get all chats for current user |
+| GET | `/api/chats/:id` | Get chat by ID |
+| GET | `/api/chats/:id/messages` | Get messages for a chat |
+| POST | `/api/chats/:id/messages` | Send a message |
+| POST | `/api/chats/:id/read` | Mark chat as read |
+| GET | `/api/chats/users` | Get all users (for login) |
+
+All endpoints require the `x-user-id` header for authentication.
+
+## WebSocket Events
+
+| Event | Direction | Description |
+|-------|-----------|-------------|
+| `authenticate` | Client → Server | Authenticate with user ID |
+| `join_chat` | Client → Server | Join a chat room |
+| `leave_chat` | Client → Server | Leave a chat room |
+| `typing` | Client → Server | Send typing indicator |
+| `user_typing` | Server → Client | Receive typing indicator |
+| `new_message` | Server → Client | Receive new message |
+
+## License
+
+MIT
