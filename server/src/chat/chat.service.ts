@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type * as Shared from 'shared';
-import type { ChatGateway } from './chat.gateway';
+import { RedisService } from '../redis/redis.service';
+
+const REDIS_CHANNEL = 'chat:messages';
 
 export interface User {
   id: string;
@@ -31,11 +33,7 @@ export interface MessageView {
 
 @Injectable()
 export class ChatService {
-  // private chatGateway?: ChatGateway;
-  //
-  // setChatGateway(gateway: ChatGateway) {
-  //   this.chatGateway = gateway;
-  // }
+  constructor(private readonly redisService: RedisService) {}
 
   private users: User[] = [
     { id: 'u1', name: 'John Doe', avatar: 'JD' },
@@ -337,10 +335,12 @@ export class ChatService {
 
     const sharedMessage = this.toSharedMessage(newMessage);
 
-    // Broadcast the new message to all users in the chat via WebSocket
-    // if (this.chatGateway) {
-    //   this.chatGateway.broadcastNewMessage(chatId, sharedMessage);
-    // }
+    // Broadcast the new message to WebSocket gateway via Redis
+    this.redisService.publish(REDIS_CHANNEL, {
+      type: 'new_message',
+      chatId,
+      message: sharedMessage,
+    });
 
     return sharedMessage;
   }

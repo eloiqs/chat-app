@@ -1,7 +1,7 @@
 {
-  "name": "server",
+  "name": "ws-gateway",
   "version": "0.0.1",
-  "description": "NestJS server for chat data",
+  "description": "WebSocket gateway for real-time chat features",
   "private": true,
   "scripts": {
     "dev": "nest start --watch",
@@ -26,7 +26,6 @@
   "devDependencies": {
     "@nestjs/cli": "^10.4.5",
     "@nestjs/schematics": "^10.1.4",
-    "@types/express": "^5.0.0",
     "@types/node": "^24.10.1",
     "ts-node": "^10.9.2",
     "typescript": "~5.9.3"

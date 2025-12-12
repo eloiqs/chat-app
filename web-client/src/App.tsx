@@ -27,6 +27,7 @@ import {
 import type { Chat, User } from 'shared';
 import { ChatListItem } from './components/chat/ChatListItem';
 import { MessageBubble } from './components/chat/MessageBubble';
+import { TypingIndicator } from './components/chat/TypingIndicator';
 import { ErrorBoundary, useError } from './components/error-boundary';
 import { AppLayout } from './components/layout/AppLayout';
 import { Button } from './components/ui/button';
@@ -34,14 +35,26 @@ import { Card } from './components/ui/card';
 import { Input } from './components/ui/input';
 import { ScrollArea } from './components/ui/scroll-area';
 import { ChatApiProvider, useChatApi } from './contexts/ChatApiProvider';
+import { SocketProvider } from './contexts/SocketProvider';
 import { useCurrentUser, UserProvider } from './contexts/UserProvider';
 import {
   FailedMessagesProvider,
   useFailedMessages,
 } from './hooks/useFailedMessages';
+import { useRealtimeChats } from './hooks/useRealtimeChats';
+import { useRealtimeMessages } from './hooks/useRealtimeMessages';
+import { useTyping, type TypingByChat } from './hooks/useTyping';
 import type { ClientMessage } from './types/types';
 
-function ChatList({ chats, className }: { chats: Chat[]; className?: string }) {
+function ChatList({
+  chats,
+  className,
+  typingByChat,
+}: {
+  chats: Chat[];
+  className?: string;
+  typingByChat: TypingByChat;
+}) {
   const viewportRef = useRef<HTMLDivElement>(null);
 
   const scrollToItem = (item: HTMLAnchorElement) => {
@@ -58,6 +71,7 @@ function ChatList({ chats, className }: { chats: Chat[]; className?: string }) {
                 key={chat.id + chat.unreadCount + chat.lastMessage}
                 chat={chat}
                 onMatch={scrollToItem}
+                isTyping={typingByChat.has(chat.id)}
               />
             ))}
           </div>
@@ -86,7 +100,9 @@ function ChatDasboardLayout({ children }: { children: ReactNode }) {
               {currentUser.avatar || currentUser.name.slice(0, 2).toUpperCase()}
             </div>
             <div>
-              <p className="font-semibold" data-testid="current-user-name">{currentUser.name}</p>
+              <p className="font-semibold" data-testid="current-user-name">
+                {currentUser.name}
+              </p>
               <p className="text-sm text-muted-foreground">Logged in</p>
             </div>
           </div>
@@ -177,6 +193,10 @@ function ChatDashboard() {
   const { chatId } = useParams<{ chatId: string }>();
   const { chats } = useChats();
 
+  // Subscribe to all chats for real-time updates in the sidebar
+  useRealtimeChats(chats);
+  const { typingByChat } = useTyping();
+
   if (chats.length === 0) {
     return (
       <div className="text-center text-muted-foreground py-12">
@@ -191,7 +211,7 @@ function ChatDashboard() {
 
   return (
     <div className="flex gap-4 h-full">
-      <ChatList className="w-80" chats={chats} />
+      <ChatList className="w-80" chats={chats} typingByChat={typingByChat} />
       <div className="flex-1 min-w-0 flex flex-col">
         <Outlet />
       </div>
@@ -229,8 +249,12 @@ function ChatDashboardPage() {
 
 export function MessageInput({
   sendMessageAction,
+  onTyping,
+  onStopTyping,
 }: {
   sendMessageAction: (content: string) => Promise<ClientMessage>;
+  onTyping?: () => void;
+  onStopTyping?: () => void;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -238,7 +262,7 @@ export function MessageInput({
     const message = formData.get('message');
     if (message && typeof message === 'string' && message.trim()) {
       formRef.current?.reset();
-
+      onStopTyping?.();
       sendMessageAction(message.trim());
     }
   };
@@ -250,6 +274,7 @@ export function MessageInput({
         name="message"
         placeholder="Type a message..."
         className="flex-1"
+        onChange={onTyping}
       />
       <Button type="submit" size="icon">
         <Send className="h-4 w-4" />
@@ -363,6 +388,12 @@ function ChatMessages({ chat }: { chat: Chat }) {
 
   const { messages } = useMessages({ chatId: chat.id });
 
+  // Real-time message subscription
+  useRealtimeMessages(chat.id);
+
+  // Typing indicators
+  const { typingUserNames, handleTyping, stopTyping } = useTyping(chat.id);
+
   const [markChatAsRead, { error: markChatAsReadError }] = useMarkChatAsRead({
     chatId: chat.id,
   });
@@ -412,8 +443,13 @@ function ChatMessages({ chat }: { chat: Chat }) {
           </div>
         )}
       </ScrollArea>
+      <TypingIndicator userNames={typingUserNames} />
       <div className="border-t p-4">
-        <MessageInput sendMessageAction={sendMessage} />
+        <MessageInput
+          sendMessageAction={sendMessage}
+          onTyping={handleTyping}
+          onStopTyping={stopTyping}
+        />
       </div>
     </Card>
   );
@@ -469,7 +505,9 @@ function AuthenticatedProviders({
   return (
     <UserProvider user={currentUser}>
       <ChatApiProvider>
-        <FailedMessagesProvider>{children}</FailedMessagesProvider>
+        <SocketProvider>
+          <FailedMessagesProvider>{children}</FailedMessagesProvider>
+        </SocketProvider>
       </ChatApiProvider>
     </UserProvider>
   );

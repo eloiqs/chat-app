@@ -1,5 +1,6 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
+import { TypingIndicator } from '@/components/chat/TypingIndicator';
 import { cn } from '@/lib/utils';
 import { useLayoutEffect, useRef } from 'react';
 import { NavLink, useMatch } from 'react-router-dom';
@@ -26,9 +27,11 @@ const formatTimestamp = (timestamp?: string) => {
 export function ChatListItem({
   chat,
   onMatch,
+  isTyping,
 }: {
   chat: Chat;
   onMatch?: (item: HTMLAnchorElement) => void;
+  isTyping?: boolean;
 }) {
   const participantNames = chat.participants.map((p) => p.name).join(', ');
   const isGroupChat = chat.participants.length > 1;
@@ -91,9 +94,13 @@ export function ChatListItem({
                 </span>
               </div>
 
-              <p className="text-sm text-muted-foreground truncate">
-                {chat.lastMessage?.content || 'No messages yet'}
-              </p>
+              {isTyping ? (
+                <TypingIndicator compact className="truncate" />
+              ) : (
+                <p className="text-sm text-muted-foreground truncate">
+                  {chat.lastMessage?.content || 'No messages yet'}
+                </p>
+              )}
             </div>
 
             {(chat.unreadCount || null) && chat.unreadCount > 0 && (

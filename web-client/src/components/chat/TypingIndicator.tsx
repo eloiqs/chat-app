@@ -1,9 +1,27 @@
+import { cn } from '@/lib/utils';
+
 interface TypingIndicatorProps {
-  userNames: string[];
+  userNames?: string[];
+  compact?: boolean;
+  className?: string;
 }
 
-export function TypingIndicator({ userNames }: TypingIndicatorProps) {
-  if (userNames.length === 0) return null;
+function TypingDots() {
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      <span className="animate-pulse [animation-delay:0ms]">•</span>
+      <span className="animate-pulse [animation-delay:300ms]">•</span>
+      <span className="animate-pulse [animation-delay:600ms]">•</span>
+    </span>
+  );
+}
+
+export function TypingIndicator({
+  userNames = [],
+  compact,
+  className,
+}: TypingIndicatorProps) {
+  if (!compact && userNames.length === 0) return null;
 
   const formatTypingText = () => {
     if (userNames.length === 1) {
@@ -15,20 +33,28 @@ export function TypingIndicator({ userNames }: TypingIndicatorProps) {
     }
   };
 
+  if (compact) {
+    return (
+      <span
+        className={cn(
+          'text-sm text-muted-foreground italic inline-flex items-center gap-1',
+          className,
+        )}
+      >
+        <TypingDots />
+      </span>
+    );
+  }
+
   return (
-    <div className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
+    <div
+      className={cn(
+        'flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground',
+        className,
+      )}
+    >
       <span>{formatTypingText()}</span>
-      <div className="flex gap-1">
-        <span className="animate-bounce" style={{ animationDelay: '0ms' }}>
-          •
-        </span>
-        <span className="animate-bounce" style={{ animationDelay: '150ms' }}>
-          •
-        </span>
-        <span className="animate-bounce" style={{ animationDelay: '300ms' }}>
-          •
-        </span>
-      </div>
+      <TypingDots />
     </div>
   );
 }

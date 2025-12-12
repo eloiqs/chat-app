@@ -46,7 +46,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLogoutCallbacks((prev) => new Set(prev).add(callback));
     return () => {
       setLogoutCallbacks((prev) => {
-        console.log('logoutCallbacks', prev);
         const next = new Set(prev);
         next.delete(callback);
         return next;

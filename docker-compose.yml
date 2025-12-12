@@ -1,0 +1,48 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    ports:
+      - "${SERVER_PORT:-3001}:${SERVER_PORT:-3001}"
+    environment:
+      - PORT=${SERVER_PORT:-3001}
+      - REDIS_URL=redis://redis:6379
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:4173}
+      - CORS_CREDENTIALS=true
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  ws-gateway:
+    build:
+      context: .
+      dockerfile: ws-gateway/Dockerfile
+    ports:
+      - "${WS_PORT:-3002}:${WS_PORT:-3002}"
+    environment:
+      - PORT=${WS_PORT:-3002}
+      - REDIS_URL=redis://redis:6379
+      - API_URL=http://server:${SERVER_PORT:-3001}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:4173}
+      - CORS_CREDENTIALS=true
+    depends_on:
+      redis:
+        condition: service_healthy
+      server:
+        condition: service_started
+
+volumes:
+  redis-data:
