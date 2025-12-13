@@ -12,4 +12,3 @@ dist
 coverage
 .nyc_output
 e2e
-web-client

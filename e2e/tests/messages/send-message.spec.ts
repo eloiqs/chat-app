@@ -3,7 +3,7 @@ import { test, API_ROUTES } from '../../fixtures/test-fixtures';
 
 test.describe('Send Message - Success', () => {
   test('should show optimistic message immediately', async ({
-    onAliceChat,
+    onFirstChat,
     chatMessagesPage,
     page,
   }) => {
@@ -23,7 +23,7 @@ test.describe('Send Message - Success', () => {
   });
 
   test('should show sending indicator while message is being sent', async ({
-    onAliceChat,
+    onFirstChat,
     chatMessagesPage,
     page,
   }) => {
@@ -41,7 +41,7 @@ test.describe('Send Message - Success', () => {
   });
 
   test('should confirm message after successful send', async ({
-    onAliceChat,
+    onFirstChat,
     chatMessagesPage,
     page,
   }) => {
@@ -63,7 +63,7 @@ test.describe('Send Message - Success', () => {
   });
 
   test('should clear input after sending', async ({
-    onAliceChat,
+    onFirstChat,
     chatMessagesPage,
     page,
   }) => {
@@ -84,9 +84,10 @@ test.describe('Send Message - Success', () => {
 
 test.describe('Send Message - Chat Isolation', () => {
   test('should not show sending message from one chat in another chat', async ({
-    johnWithChatsLoaded,
+    authenticatedUser,
     chatDashboardPage,
     chatMessagesPage,
+    testData,
     page,
   }) => {
     const controller = new RouteController({ method: 'POST' });
@@ -94,33 +95,34 @@ test.describe('Send Message - Chat Isolation', () => {
       controller.handle(route),
     );
 
-    // Navigate to Alice's chat and send a message
-    await chatDashboardPage.selectChatById('c1');
-    const testMessage = `Sending in Alice chat ${Date.now()}`;
+    // Navigate to first chat and send a message
+    await chatDashboardPage.selectChatById(testData.chats[0].id);
+    const testMessage = `Sending in chat 1 ${Date.now()}`;
     await chatMessagesPage.sendMessage(testMessage);
 
     // Verify message is in sending state
     await chatMessagesPage.expectMessageSending(testMessage);
 
-    // Navigate to Bob's chat
-    await chatDashboardPage.selectChatById('c2');
+    // Navigate to second chat
+    await chatDashboardPage.selectChatById(testData.chats[1].id);
 
-    // The sending message should NOT be visible in Bob's chat
+    // The sending message should NOT be visible in second chat
     await chatMessagesPage.expectMessageNotVisible(testMessage);
 
     // Complete the request
     controller.continueAll();
 
-    // Navigate back to Alice's chat and verify message was sent
-    await chatDashboardPage.selectChatById('c1');
+    // Navigate back to first chat and verify message was sent
+    await chatDashboardPage.selectChatById(testData.chats[0].id);
     await chatMessagesPage.expectMessageSent(testMessage);
     await chatMessagesPage.expectMessageVisible(testMessage);
   });
 
   test('should show correct sending messages when switching between chats', async ({
-    johnWithChatsLoaded,
+    authenticatedUser,
     chatDashboardPage,
     chatMessagesPage,
+    testData,
     page,
   }) => {
     const controller = new RouteController({ method: 'POST' });
@@ -128,41 +130,42 @@ test.describe('Send Message - Chat Isolation', () => {
       controller.handle(route),
     );
 
-    // Send message in Alice's chat
-    await chatDashboardPage.selectChatById('c1');
-    const aliceMessage = `Message for Alice ${Date.now()}`;
-    await chatMessagesPage.sendMessage(aliceMessage);
-    await chatMessagesPage.expectMessageSending(aliceMessage);
+    // Send message in first chat
+    await chatDashboardPage.selectChatById(testData.chats[0].id);
+    const chat1Message = `Message for chat 1 ${Date.now()}`;
+    await chatMessagesPage.sendMessage(chat1Message);
+    await chatMessagesPage.expectMessageSending(chat1Message);
 
-    // Send message in Bob's chat
-    await chatDashboardPage.selectChatById('c2');
-    const bobMessage = `Message for Bob ${Date.now()}`;
-    await chatMessagesPage.sendMessage(bobMessage);
-    await chatMessagesPage.expectMessageSending(bobMessage);
+    // Send message in second chat
+    await chatDashboardPage.selectChatById(testData.chats[1].id);
+    const chat2Message = `Message for chat 2 ${Date.now()}`;
+    await chatMessagesPage.sendMessage(chat2Message);
+    await chatMessagesPage.expectMessageSending(chat2Message);
 
-    // Verify Bob's chat shows only Bob's message
-    await chatMessagesPage.expectMessageNotVisible(aliceMessage);
+    // Verify second chat shows only its message
+    await chatMessagesPage.expectMessageNotVisible(chat1Message);
 
-    // Switch back to Alice's chat - should see Alice's message only
-    await chatDashboardPage.selectChatById('c1');
-    await chatMessagesPage.expectMessageVisible(aliceMessage);
-    await chatMessagesPage.expectMessageNotVisible(bobMessage);
+    // Switch back to first chat - should see its message only
+    await chatDashboardPage.selectChatById(testData.chats[0].id);
+    await chatMessagesPage.expectMessageVisible(chat1Message);
+    await chatMessagesPage.expectMessageNotVisible(chat2Message);
 
     // Complete all requests
     controller.continueAll();
 
-    // Verify Alice's message is sent
-    await chatMessagesPage.expectMessageSent(aliceMessage);
+    // Verify first chat's message is sent
+    await chatMessagesPage.expectMessageSent(chat1Message);
 
-    // Verify Bob's message is sent
-    await chatDashboardPage.selectChatById('c2');
-    await chatMessagesPage.expectMessageSent(bobMessage);
+    // Verify second chat's message is sent
+    await chatDashboardPage.selectChatById(testData.chats[1].id);
+    await chatMessagesPage.expectMessageSent(chat2Message);
   });
 
   test('should maintain separate sending messages for multiple chats', async ({
-    johnWithChatsLoaded,
+    authenticatedUser,
     chatDashboardPage,
     chatMessagesPage,
+    testData,
     page,
   }) => {
     const controller = new RouteController({ method: 'POST' });
@@ -171,45 +174,45 @@ test.describe('Send Message - Chat Isolation', () => {
     );
 
     // Send messages to three different chats
-    await chatDashboardPage.selectChatById('c1');
-    const aliceMessage = `Sending to Alice ${Date.now()}`;
-    await chatMessagesPage.sendMessage(aliceMessage);
+    await chatDashboardPage.selectChatById(testData.chats[0].id);
+    const chat1Message = `Sending to chat 1 ${Date.now()}`;
+    await chatMessagesPage.sendMessage(chat1Message);
 
-    await chatDashboardPage.selectChatById('c2');
-    const bobMessage = `Sending to Bob ${Date.now()}`;
-    await chatMessagesPage.sendMessage(bobMessage);
+    await chatDashboardPage.selectChatById(testData.chats[1].id);
+    const chat2Message = `Sending to chat 2 ${Date.now()}`;
+    await chatMessagesPage.sendMessage(chat2Message);
 
-    await chatDashboardPage.selectChatById('c3');
-    const charlieMessage = `Sending to Charlie ${Date.now()}`;
-    await chatMessagesPage.sendMessage(charlieMessage);
+    await chatDashboardPage.selectChatById(testData.chats[2].id);
+    const chat3Message = `Sending to chat 3 ${Date.now()}`;
+    await chatMessagesPage.sendMessage(chat3Message);
 
-    // Verify Charlie's chat shows only Charlie's message
-    await chatMessagesPage.expectMessageSending(charlieMessage);
-    await chatMessagesPage.expectMessageNotVisible(aliceMessage);
-    await chatMessagesPage.expectMessageNotVisible(bobMessage);
+    // Verify third chat shows only its message
+    await chatMessagesPage.expectMessageSending(chat3Message);
+    await chatMessagesPage.expectMessageNotVisible(chat1Message);
+    await chatMessagesPage.expectMessageNotVisible(chat2Message);
 
-    // Verify Alice's chat shows only Alice's message
-    await chatDashboardPage.selectChatById('c1');
-    await chatMessagesPage.expectMessageSending(aliceMessage);
-    await chatMessagesPage.expectMessageNotVisible(bobMessage);
-    await chatMessagesPage.expectMessageNotVisible(charlieMessage);
+    // Verify first chat shows only its message
+    await chatDashboardPage.selectChatById(testData.chats[0].id);
+    await chatMessagesPage.expectMessageSending(chat1Message);
+    await chatMessagesPage.expectMessageNotVisible(chat2Message);
+    await chatMessagesPage.expectMessageNotVisible(chat3Message);
 
-    // Verify Bob's chat shows only Bob's message
-    await chatDashboardPage.selectChatById('c2');
-    await chatMessagesPage.expectMessageSending(bobMessage);
-    await chatMessagesPage.expectMessageNotVisible(aliceMessage);
-    await chatMessagesPage.expectMessageNotVisible(charlieMessage);
+    // Verify second chat shows only its message
+    await chatDashboardPage.selectChatById(testData.chats[1].id);
+    await chatMessagesPage.expectMessageSending(chat2Message);
+    await chatMessagesPage.expectMessageNotVisible(chat1Message);
+    await chatMessagesPage.expectMessageNotVisible(chat3Message);
 
     // Complete all requests
     controller.continueAll();
 
     // Verify all messages are sent in their respective chats
-    await chatMessagesPage.expectMessageSent(bobMessage);
+    await chatMessagesPage.expectMessageSent(chat2Message);
 
-    await chatDashboardPage.selectChatById('c1');
-    await chatMessagesPage.expectMessageSent(aliceMessage);
+    await chatDashboardPage.selectChatById(testData.chats[0].id);
+    await chatMessagesPage.expectMessageSent(chat1Message);
 
-    await chatDashboardPage.selectChatById('c3');
-    await chatMessagesPage.expectMessageSent(charlieMessage);
+    await chatDashboardPage.selectChatById(testData.chats[2].id);
+    await chatMessagesPage.expectMessageSent(chat3Message);
   });
 });

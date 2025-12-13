@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ COPY server ./server
 # Build server only (shared is imported as TypeScript directly)
 RUN npm run build --workspace=server
 
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 
 WORKDIR /app
 
@@ -26,11 +26,13 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/shared ./shared
 COPY --from=builder /app/server/package*.json ./server/
 COPY --from=builder /app/server/dist ./server/dist
+COPY --from=builder /app/server/prisma ./server/prisma
+COPY --from=builder /app/server/prisma.config.ts ./server/prisma.config.ts
 COPY --from=builder /app/node_modules ./node_modules
 
 ENV NODE_ENV=production
-ENV PORT=3001
 
-EXPOSE 3001
+WORKDIR /app/server
 
-CMD ["node", "server/dist/main.js"]
+# Start the server
+CMD ["node", "dist/main.js"]

@@ -1,5 +1,5 @@
 import { RouteController } from 'playwright-route-controller';
-import { test, expect, UI_TEXT, API_ROUTES, TestUsers } from '../../fixtures/test-fixtures';
+import { test, expect, UI_TEXT, API_ROUTES } from '../../fixtures/test-fixtures';
 import { addFailedMessage } from '../../helpers/storage.helper';
 
 test.describe('Send Message - Error & Recovery', () => {
@@ -76,68 +76,72 @@ test.describe('Send Message - Error & Recovery', () => {
     withFailedMessage,
     chatDashboardPage,
     chatMessagesPage,
+    testData,
   }) => {
-    // Add failed message to chat c1 (Alice) but don't navigate to it
-    await withFailedMessage('Failed in Alice chat', {
-      chatId: 'c1',
+    // Add failed message to first chat but don't navigate to it
+    await withFailedMessage('Failed in first chat', {
+      chatId: testData.chats[0].id,
       navigateToChat: false,
     });
 
-    // Navigate to chat c2 (Bob) instead
-    await chatDashboardPage.selectChatById('c2');
+    // Navigate to second chat instead
+    await chatDashboardPage.selectChatById(testData.chats[1].id);
 
-    // The failed message should NOT be visible in Bob's chat
-    await chatMessagesPage.expectMessageNotVisible('Failed in Alice chat');
+    // The failed message should NOT be visible in second chat
+    await chatMessagesPage.expectMessageNotVisible('Failed in first chat');
   });
 
   test('should show correct failed messages when switching between chats', async ({
     withFailedMessage,
     chatDashboardPage,
     chatMessagesPage,
+    authenticatedUser,
+    testData,
     page,
   }) => {
-    // Add failed message to chat c1 (Alice)
-    await withFailedMessage('Failed message for Alice', {
-      chatId: 'c1',
+    // Add failed message to first chat
+    await withFailedMessage('Failed message for chat 1', {
+      chatId: testData.chats[0].id,
       navigateToChat: false,
     });
 
-    // Add failed message to chat c2 (Bob) directly via storage helper
-    await addFailedMessage(page, TestUsers.john.id, 'c2', {
-      content: 'Failed message for Bob',
+    // Add failed message to second chat directly via storage helper
+    await addFailedMessage(page, authenticatedUser.id, testData.chats[1].id, {
+      content: 'Failed message for chat 2',
       error: true,
     });
     await page.reload();
     await chatDashboardPage.waitForChatsToLoad();
 
-    // Navigate to Alice's chat (c1) - should see Alice's failed message
-    await chatDashboardPage.selectChatById('c1');
-    await chatMessagesPage.expectMessageVisible('Failed message for Alice');
-    await chatMessagesPage.expectMessageNotVisible('Failed message for Bob');
+    // Navigate to first chat - should see first chat's failed message
+    await chatDashboardPage.selectChatById(testData.chats[0].id);
+    await chatMessagesPage.expectMessageVisible('Failed message for chat 1');
+    await chatMessagesPage.expectMessageNotVisible('Failed message for chat 2');
 
-    // Navigate to Bob's chat (c2) - should see Bob's failed message
-    await chatDashboardPage.selectChatById('c2');
-    await chatMessagesPage.expectMessageVisible('Failed message for Bob');
-    await chatMessagesPage.expectMessageNotVisible('Failed message for Alice');
+    // Navigate to second chat - should see second chat's failed message
+    await chatDashboardPage.selectChatById(testData.chats[1].id);
+    await chatMessagesPage.expectMessageVisible('Failed message for chat 2');
+    await chatMessagesPage.expectMessageNotVisible('Failed message for chat 1');
   });
 
   test('should maintain separate failed messages for multiple chats', async ({
-    authenticatedAsJohn,
+    authenticatedUser,
     chatDashboardPage,
     chatMessagesPage,
+    testData,
     page,
   }) => {
     // Add different failed messages to three different chats
-    await addFailedMessage(page, TestUsers.john.id, 'c1', {
-      content: 'Error in chat with Alice',
+    await addFailedMessage(page, authenticatedUser.id, testData.chats[0].id, {
+      content: 'Error in chat 1',
       error: true,
     });
-    await addFailedMessage(page, TestUsers.john.id, 'c2', {
-      content: 'Error in chat with Bob',
+    await addFailedMessage(page, authenticatedUser.id, testData.chats[1].id, {
+      content: 'Error in chat 2',
       error: true,
     });
-    await addFailedMessage(page, TestUsers.john.id, 'c3', {
-      content: 'Error in chat with Charlie',
+    await addFailedMessage(page, authenticatedUser.id, testData.chats[2].id, {
+      content: 'Error in chat 3',
       error: true,
     });
 
@@ -145,19 +149,19 @@ test.describe('Send Message - Error & Recovery', () => {
     await chatDashboardPage.waitForChatsToLoad();
 
     // Verify each chat shows only its own failed message
-    await chatDashboardPage.selectChatById('c1');
-    await chatMessagesPage.expectMessageVisible('Error in chat with Alice');
-    await chatMessagesPage.expectMessageNotVisible('Error in chat with Bob');
-    await chatMessagesPage.expectMessageNotVisible('Error in chat with Charlie');
+    await chatDashboardPage.selectChatById(testData.chats[0].id);
+    await chatMessagesPage.expectMessageVisible('Error in chat 1');
+    await chatMessagesPage.expectMessageNotVisible('Error in chat 2');
+    await chatMessagesPage.expectMessageNotVisible('Error in chat 3');
 
-    await chatDashboardPage.selectChatById('c2');
-    await chatMessagesPage.expectMessageVisible('Error in chat with Bob');
-    await chatMessagesPage.expectMessageNotVisible('Error in chat with Alice');
-    await chatMessagesPage.expectMessageNotVisible('Error in chat with Charlie');
+    await chatDashboardPage.selectChatById(testData.chats[1].id);
+    await chatMessagesPage.expectMessageVisible('Error in chat 2');
+    await chatMessagesPage.expectMessageNotVisible('Error in chat 1');
+    await chatMessagesPage.expectMessageNotVisible('Error in chat 3');
 
-    await chatDashboardPage.selectChatById('c3');
-    await chatMessagesPage.expectMessageVisible('Error in chat with Charlie');
-    await chatMessagesPage.expectMessageNotVisible('Error in chat with Alice');
-    await chatMessagesPage.expectMessageNotVisible('Error in chat with Bob');
+    await chatDashboardPage.selectChatById(testData.chats[2].id);
+    await chatMessagesPage.expectMessageVisible('Error in chat 3');
+    await chatMessagesPage.expectMessageNotVisible('Error in chat 1');
+    await chatMessagesPage.expectMessageNotVisible('Error in chat 2');
   });
 });

@@ -1,8 +1,14 @@
-import { test, expect, TestUsers, STORAGE_KEYS, UI_TEXT, API_ROUTES } from '../../fixtures/test-fixtures';
+import {
+  test,
+  expect,
+  STORAGE_KEYS,
+  API_ROUTES,
+} from '../../fixtures/test-fixtures';
 
 test.describe('User Selection & Login', () => {
   test('should display user selection page on first visit', async ({
     userSelectionPage,
+    testData,
   }) => {
     await userSelectionPage.goto();
     await userSelectionPage.waitForUsersToLoad();
@@ -12,6 +18,7 @@ test.describe('User Selection & Login', () => {
   test('should show loading state while fetching users', async ({
     page,
     userSelectionPage,
+    testData,
   }) => {
     await page.route(API_ROUTES.USERS, async () => {
       // Never respond - keep loading forever
@@ -21,47 +28,54 @@ test.describe('User Selection & Login', () => {
     await userSelectionPage.expectLoading();
   });
 
-  test('should display all 5 available users', async ({ userSelectionPage }) => {
+  test('should display test users', async ({ userSelectionPage, testData, page }) => {
     await userSelectionPage.goto();
     await userSelectionPage.waitForUsersToLoad();
-    await userSelectionPage.expectUserCount(5);
+    // Verify test-provisioned users are visible (there may be seed data too)
+    await expect(page.getByText(testData.user.name)).toBeVisible();
+    for (const otherUser of testData.otherUsers) {
+      await expect(page.getByText(otherUser.name)).toBeVisible();
+    }
   });
 
   test('should redirect to chat dashboard after selecting a user', async ({
     userSelectionPage,
     chatDashboardPage,
+    testData,
     page,
   }) => {
     await userSelectionPage.goto();
     await userSelectionPage.waitForUsersToLoad();
-    await userSelectionPage.selectUserByName(TestUsers.john.name);
+    await userSelectionPage.selectUserByName(testData.user.name);
 
     await expect(page).toHaveURL(/\/chat/);
     await chatDashboardPage.waitForChatsToLoad();
-    await chatDashboardPage.expectCurrentUser(TestUsers.john.name);
+    await chatDashboardPage.expectCurrentUser(testData.user.name);
   });
 
   test('should persist login across page refresh', async ({
     userSelectionPage,
     chatDashboardPage,
+    testData,
     page,
   }) => {
     await userSelectionPage.goto();
     await userSelectionPage.waitForUsersToLoad();
-    await userSelectionPage.selectUserByName(TestUsers.alice.name);
+    await userSelectionPage.selectUserByName(testData.user.name);
 
     await page.reload();
     await chatDashboardPage.waitForChatsToLoad();
-    await chatDashboardPage.expectCurrentUser(TestUsers.alice.name);
+    await chatDashboardPage.expectCurrentUser(testData.user.name);
   });
 
   test('should store user in sessionStorage after login', async ({
     userSelectionPage,
+    testData,
     page,
   }) => {
     await userSelectionPage.goto();
     await userSelectionPage.waitForUsersToLoad();
-    await userSelectionPage.selectUserByName(TestUsers.bob.name);
+    await userSelectionPage.selectUserByName(testData.user.name);
 
     const storedUser = await page.evaluate(
       (key) => sessionStorage.getItem(key),
@@ -70,8 +84,8 @@ test.describe('User Selection & Login', () => {
 
     expect(storedUser).toBeTruthy();
     expect(JSON.parse(storedUser!)).toMatchObject({
-      id: TestUsers.bob.id,
-      name: TestUsers.bob.name,
+      id: testData.user.id,
+      name: testData.user.name,
     });
   });
 });

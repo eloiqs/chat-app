@@ -1,9 +1,8 @@
-import { test, expect, TestUsers, STORAGE_KEYS } from '../../fixtures/test-fixtures';
-import { TestChats } from '../../data/test-data';
+import { test, expect, STORAGE_KEYS } from '../../fixtures/test-fixtures';
 
 test.describe('Logout', () => {
   test('should return to user selection after logout', async ({
-    johnWithChatsLoaded,
+    authenticatedUser,
     chatDashboardPage,
     userSelectionPage,
   }) => {
@@ -15,7 +14,7 @@ test.describe('Logout', () => {
   });
 
   test('should clear sessionStorage on logout', async ({
-    johnWithChatsLoaded,
+    authenticatedUser,
     chatDashboardPage,
     page,
   }) => {
@@ -29,11 +28,12 @@ test.describe('Logout', () => {
   });
 
   test('should clear failed messages on logout', async ({
-    johnWithChatsLoaded,
+    authenticatedUser,
     chatDashboardPage,
+    testData,
     page,
   }) => {
-    const storageKey = `${STORAGE_KEYS.FAILED_MESSAGES_PREFIX}-${TestUsers.john.id}-${TestChats.johnAlice.id}`;
+    const storageKey = `${STORAGE_KEYS.FAILED_MESSAGES_PREFIX}-${authenticatedUser.id}-${testData.chats[0].id}`;
 
     // First add a failed message to storage
     await page.evaluate(

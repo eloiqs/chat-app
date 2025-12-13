@@ -19,10 +19,21 @@
     "test:e2e": "npm test --workspace=e2e",
     "test:e2e:ui": "npm run test:ui --workspace=e2e",
     "test:e2e:headed": "npm run test:headed --workspace=e2e",
+    "test:e2e:report": "npm run report --workspace=e2e",
+    "e2e:up": "docker compose -f docker-compose.e2e.yml up -d --build --wait",
+    "e2e:down": "docker compose -f docker-compose.e2e.yml down -v",
+    "e2e:logs": "docker compose -f docker-compose.e2e.yml logs -f",
+    "docker:infra": "docker compose up -d postgres redis",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:build": "docker compose build",
-    "docker:logs": "docker compose logs -f"
+    "docker:logs": "docker compose logs -f",
+    "docker:clean": "docker compose down -v --remove-orphans",
+    "db:generate": "npm run db:generate --workspace=server",
+    "db:deploy": "npm run db:deploy --workspace=server",
+    "db:reset": "npm run db:reset --workspace=server",
+    "db:seed": "npm run db:seed --workspace=server",
+    "db:studio": "npm run db:studio --workspace=server"
   },
   "devDependencies": {
     "prettier": "^3.7.3"

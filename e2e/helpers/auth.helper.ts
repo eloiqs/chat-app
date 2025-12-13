@@ -1,12 +1,8 @@
 import { Page } from '@playwright/test';
 import type { User } from 'shared';
 import { STORAGE_KEYS } from './storage.helper';
-import { TestUsers } from '../data/test-data';
 
 const STORAGE_KEY = STORAGE_KEYS.USER;
-
-// Re-export for backwards compatibility
-export const testUsers = TestUsers;
 
 export async function loginAsUser(page: Page, user: User): Promise<void> {
   await page.evaluate(

@@ -7,7 +7,9 @@ export class ChatMessagesPage {
   readonly emptyState: Locator;
 
   constructor(private readonly page: Page) {
-    this.messageInput = page.getByPlaceholder(UI_TEXT.MESSAGE_INPUT_PLACEHOLDER);
+    this.messageInput = page.getByPlaceholder(
+      UI_TEXT.MESSAGE_INPUT_PLACEHOLDER,
+    );
     this.sendButton = page.locator('button[type="submit"]');
     this.emptyState = page.getByText(UI_TEXT.NO_MESSAGES);
   }

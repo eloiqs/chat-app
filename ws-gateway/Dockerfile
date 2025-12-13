@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ COPY ws-gateway ./ws-gateway
 # Build ws-gateway only (shared is imported as TypeScript directly)
 RUN npm run build --workspace=ws-gateway
 
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 
 WORKDIR /app
 
@@ -29,8 +29,6 @@ COPY --from=builder /app/ws-gateway/dist ./ws-gateway/dist
 COPY --from=builder /app/node_modules ./node_modules
 
 ENV NODE_ENV=production
-ENV PORT=3002
 
-EXPOSE 3002
-
+# PORT is set at runtime via docker-compose
 CMD ["node", "ws-gateway/dist/main.js"]

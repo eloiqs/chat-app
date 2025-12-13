@@ -19,6 +19,7 @@ export class UserSelectionPage {
 
   async waitForUsersToLoad(): Promise<void> {
     await expect(this.loadingIndicator).not.toBeVisible({ timeout: 10000 });
+    await expect(this.page.getByText('Something went wrong')).not.toBeVisible();
     await expect(this.heading).toBeVisible();
   }
 

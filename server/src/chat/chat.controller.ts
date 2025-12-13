@@ -13,15 +13,17 @@ import { ChatService } from './chat.service';
 
 @Controller('api/chats')
 export class ChatController {
-  constructor(private readonly chatService: ChatService) { }
+  constructor(private readonly chatService: ChatService) {}
 
   @Get('users')
-  getAllUsers(): Shared.User[] {
+  async getAllUsers(): Promise<Shared.User[]> {
     return this.chatService.getAllUsers();
   }
 
   @Get()
-  getAllChats(@Headers('x-user-id') userId: string): Shared.Chat[] {
+  async getAllChats(
+    @Headers('x-user-id') userId: string,
+  ): Promise<Shared.Chat[]> {
     if (!userId) {
       throw new UnauthorizedException('User ID is required');
     }
@@ -29,15 +31,15 @@ export class ChatController {
   }
 
   @Get(':id')
-  getChatById(
+  async getChatById(
     @Param('id') id: string,
     @Headers('x-user-id') userId: string,
-  ): Shared.Chat {
+  ): Promise<Shared.Chat> {
     if (!userId) {
       throw new UnauthorizedException('User ID is required');
     }
 
-    const chat = this.chatService.getChatById(id, userId);
+    const chat = await this.chatService.getChatById(id, userId);
     if (!chat) {
       throw new NotFoundException('Chat not found');
     }
@@ -45,15 +47,15 @@ export class ChatController {
   }
 
   @Get(':id/messages')
-  getChatMessages(
+  async getChatMessages(
     @Param('id') id: string,
     @Headers('x-user-id') userId: string,
-  ): Shared.Message[] {
+  ): Promise<Shared.Message[]> {
     if (!userId) {
       throw new UnauthorizedException('User ID is required');
     }
 
-    const messages = this.chatService.getChatMessages(id, userId);
+    const messages = await this.chatService.getChatMessages(id, userId);
     if (!messages) {
       throw new NotFoundException('Chat not found');
     }
@@ -61,16 +63,20 @@ export class ChatController {
   }
 
   @Post(':id/messages')
-  createMessage(
+  async createMessage(
     @Param('id') id: string,
     @Headers('x-user-id') userId: string,
     @Body() body: { content: string },
-  ): Shared.Message {
+  ): Promise<Shared.Message> {
     if (!userId) {
       throw new UnauthorizedException('User ID is required');
     }
 
-    const message = this.chatService.createMessage(id, body.content, userId);
+    const message = await this.chatService.createMessage(
+      id,
+      body.content,
+      userId,
+    );
     if (!message) {
       throw new NotFoundException('Chat not found');
     }
@@ -78,15 +84,15 @@ export class ChatController {
   }
 
   @Post(':id/read')
-  markChatAsRead(
+  async markChatAsRead(
     @Param('id') id: string,
     @Headers('x-user-id') userId: string,
-  ): { success: boolean } {
+  ): Promise<{ success: boolean }> {
     if (!userId) {
       throw new UnauthorizedException('User ID is required');
     }
 
-    const success = this.chatService.markChatAsRead(id, userId);
+    const success = await this.chatService.markChatAsRead(id, userId);
     if (!success) {
       throw new NotFoundException('Chat not found');
     }

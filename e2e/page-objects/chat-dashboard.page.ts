@@ -16,6 +16,7 @@ export class ChatDashboardPage {
 
   async waitForChatsToLoad(): Promise<void> {
     await expect(this.loadingChats).not.toBeVisible({ timeout: 10000 });
+    await expect(this.page.getByText('Something went wrong')).not.toBeVisible();
   }
 
   async expectCurrentUser(name: string): Promise<void> {
