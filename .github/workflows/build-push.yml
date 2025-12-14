@@ -1,0 +1,133 @@
+name: Build and Push
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to build for'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      server-image: ${{ steps.build.outputs.server-image }}
+      ws-gateway-image: ${{ steps.build.outputs.ws-gateway-image }}
+      web-client-image: ${{ steps.build.outputs.web-client-image }}
+      image-tag: ${{ steps.tag.outputs.tag }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/chatapp-staging-github-actions
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=sha-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push server image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: server/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/chatapp/server:${{ steps.tag.outputs.tag }}
+            ${{ steps.login-ecr.outputs.registry }}/chatapp/server:latest
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,mode=max,scope=server
+          platforms: linux/amd64
+
+      - name: Build and push ws-gateway image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ws-gateway/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/chatapp/ws-gateway:${{ steps.tag.outputs.tag }}
+            ${{ steps.login-ecr.outputs.registry }}/chatapp/ws-gateway:latest
+          cache-from: type=gha,scope=ws-gateway
+          cache-to: type=gha,mode=max,scope=ws-gateway
+          platforms: linux/amd64
+
+      - name: Build and push web-client image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: web-client/Dockerfile
+          push: true
+          build-args: |
+            VITE_SERVER_URL=${{ steps.env.outputs.environment == 'production' && vars.PROD_SERVER_URL || vars.STAGING_SERVER_URL }}
+            VITE_WS_URL=${{ steps.env.outputs.environment == 'production' && vars.PROD_WS_URL || vars.STAGING_WS_URL }}
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/chatapp/web-client:${{ steps.tag.outputs.tag }}
+            ${{ steps.login-ecr.outputs.registry }}/chatapp/web-client:latest
+          cache-from: type=gha,scope=web-client
+          cache-to: type=gha,mode=max,scope=web-client
+          platforms: linux/amd64
+
+      - name: Output image references
+        id: build
+        run: |
+          echo "server-image=${{ steps.login-ecr.outputs.registry }}/chatapp/server:${{ steps.tag.outputs.tag }}" >> $GITHUB_OUTPUT
+          echo "ws-gateway-image=${{ steps.login-ecr.outputs.registry }}/chatapp/ws-gateway:${{ steps.tag.outputs.tag }}" >> $GITHUB_OUTPUT
+          echo "web-client-image=${{ steps.login-ecr.outputs.registry }}/chatapp/web-client:${{ steps.tag.outputs.tag }}" >> $GITHUB_OUTPUT
+
+  trigger-deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Trigger staging deployment
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          event-type: deploy-staging
+          client-payload: |
+            {
+              "image_tag": "${{ needs.build-and-push.outputs.image-tag }}",
+              "server_image": "${{ needs.build-and-push.outputs.server-image }}",
+              "ws_gateway_image": "${{ needs.build-and-push.outputs.ws-gateway-image }}",
+              "web_client_image": "${{ needs.build-and-push.outputs.web-client-image }}"
+            }

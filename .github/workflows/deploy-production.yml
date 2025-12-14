@@ -1,0 +1,142 @@
+name: Deploy to Production
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (e.g., v1.0.0)'
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  EKS_CLUSTER_NAME: chatapp-production
+  NAMESPACE: chatapp-production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/chatapp-production-github-actions
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+
+      - name: Set image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Verify image exists
+        run: |
+          # Verify all images exist with the tag
+          aws ecr describe-images --repository-name chatapp/server --image-ids imageTag=${{ steps.tag.outputs.tag }} || { echo "Server image not found!"; exit 1; }
+          aws ecr describe-images --repository-name chatapp/ws-gateway --image-ids imageTag=${{ steps.tag.outputs.tag }} || { echo "WS Gateway image not found!"; exit 1; }
+          aws ecr describe-images --repository-name chatapp/web-client --image-ids imageTag=${{ steps.tag.outputs.tag }} || { echo "Web Client image not found!"; exit 1; }
+          echo "All images verified!"
+
+      - name: Update Kustomize images
+        run: |
+          cd infrastructure/kubernetes/overlays/production
+          kustomize edit set image \
+            chatapp/server=${{ steps.login-ecr.outputs.registry }}/chatapp/server:${{ steps.tag.outputs.tag }} \
+            chatapp/ws-gateway=${{ steps.login-ecr.outputs.registry }}/chatapp/ws-gateway:${{ steps.tag.outputs.tag }} \
+            chatapp/web-client=${{ steps.login-ecr.outputs.registry }}/chatapp/web-client:${{ steps.tag.outputs.tag }}
+
+      - name: Run database migrations
+        run: |
+          # Delete old migration job if exists
+          kubectl delete job db-migration -n ${{ env.NAMESPACE }} --ignore-not-found
+
+          # Apply migration job
+          kubectl apply -k infrastructure/kubernetes/base/migrations -n ${{ env.NAMESPACE }}
+
+          # Wait for migration to complete
+          kubectl wait --for=condition=complete job/db-migration -n ${{ env.NAMESPACE }} --timeout=300s
+
+      - name: Deploy to production
+        run: |
+          kubectl apply -k infrastructure/kubernetes/overlays/production
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/server -n ${{ env.NAMESPACE }} --timeout=600s
+          kubectl rollout status deployment/ws-gateway -n ${{ env.NAMESPACE }} --timeout=600s
+          kubectl rollout status deployment/web-client -n ${{ env.NAMESPACE }} --timeout=600s
+
+      - name: Get deployment status
+        run: |
+          echo "=== Deployment Status ==="
+          kubectl get deployments -n ${{ env.NAMESPACE }}
+          echo ""
+          echo "=== Pod Status ==="
+          kubectl get pods -n ${{ env.NAMESPACE }}
+          echo ""
+          echo "=== HPA Status ==="
+          kubectl get hpa -n ${{ env.NAMESPACE }}
+          echo ""
+          echo "=== Ingress ==="
+          kubectl get ingress -n ${{ env.NAMESPACE }}
+
+      - name: Run smoke tests
+        run: |
+          # Get the ALB URL
+          ALB_URL=$(kubectl get ingress chatapp-ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+          echo "Testing ALB URL: http://${ALB_URL}"
+
+          # Wait for ALB to be ready
+          for i in {1..30}; do
+            if curl -sf "http://${ALB_URL}/api/chats/users" > /dev/null; then
+              echo "Smoke test passed!"
+              exit 0
+            fi
+            echo "Waiting for ALB to be ready... (attempt $i/30)"
+            sleep 10
+          done
+
+          echo "Smoke test failed!"
+          exit 1
+
+      - name: Create deployment record
+        run: |
+          echo "Deployed version: ${{ steps.tag.outputs.tag }}"
+          echo "Deployed at: $(date -u)"
+          echo "Deployed by: ${{ github.actor }}"
+
+      - name: Notify on success
+        if: success()
+        run: |
+          echo "Production deployment successful!"
+          echo "Version: ${{ steps.tag.outputs.tag }}"
+          # Add Slack/Discord notification here
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Production deployment failed!"
+          # Add Slack/Discord notification here
+          # Consider rollback strategy

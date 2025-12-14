@@ -1,0 +1,39 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: chatapp-production
+
+resources:
+  - ../../base
+  - namespace.yaml
+  - configmap.yaml
+  - external-secrets.yaml
+  - ingress-alb.yaml
+  - hpa.yaml
+  - pdb.yaml
+
+# Images will be set by CI/CD with specific tags
+images:
+  - name: chatapp/server
+    newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/chatapp/server
+    newTag: latest
+  - name: chatapp/ws-gateway
+    newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/chatapp/ws-gateway
+    newTag: latest
+  - name: chatapp/web-client
+    newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/chatapp/web-client
+    newTag: latest
+
+patches:
+  - path: patches/server-resources.yaml
+  - path: patches/ws-gateway-resources.yaml
+  - path: patches/serviceaccount-annotations.yaml
+
+# Base replicas (HPA will scale from here)
+replicas:
+  - name: server
+    count: 2
+  - name: ws-gateway
+    count: 2
+  - name: web-client
+    count: 2

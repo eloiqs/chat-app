@@ -1,0 +1,42 @@
+# Pod Disruption Budgets for high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: server-pdb
+  labels:
+    app: chatapp
+    component: server
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: chatapp
+      component: server
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ws-gateway-pdb
+  labels:
+    app: chatapp
+    component: ws-gateway
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: chatapp
+      component: ws-gateway
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-client-pdb
+  labels:
+    app: chatapp
+    component: web-client
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: chatapp
+      component: web-client

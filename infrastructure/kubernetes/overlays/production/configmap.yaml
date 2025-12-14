@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chatapp-config
+  labels:
+    app: chatapp
+data:
+  # These values will be set based on Terraform outputs
+  REDIS_URL: "redis://ELASTICACHE_ENDPOINT:6379"
+  # Update with actual domain/ALB DNS
+  CORS_ORIGINS: "https://chatapp.example.com,https://www.chatapp.example.com"

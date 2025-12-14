@@ -1,0 +1,85 @@
+# PrometheusRule for chatapp alerting
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: chatapp-alerts
+  namespace: monitoring
+  labels:
+    app: chatapp
+spec:
+  groups:
+    - name: chatapp.rules
+      rules:
+        # High error rate
+        - alert: ChatAppHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{job="chatapp-server",status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{job="chatapp-server"}[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High error rate on chatapp server"
+            description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+
+        # Pod not ready
+        - alert: ChatAppPodNotReady
+          expr: |
+            kube_pod_status_ready{namespace=~"chatapp-.*",condition="true"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.pod }} is not ready"
+            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been not ready for 5 minutes"
+
+        # High memory usage
+        - alert: ChatAppHighMemoryUsage
+          expr: |
+            container_memory_usage_bytes{namespace=~"chatapp-.*",container!=""}
+            /
+            container_spec_memory_limit_bytes{namespace=~"chatapp-.*",container!=""} > 0.9
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High memory usage on {{ $labels.pod }}"
+            description: "Container {{ $labels.container }} in pod {{ $labels.pod }} is using {{ $value | humanizePercentage }} of its memory limit"
+
+        # High CPU usage
+        - alert: ChatAppHighCPUUsage
+          expr: |
+            rate(container_cpu_usage_seconds_total{namespace=~"chatapp-.*",container!=""}[5m])
+            /
+            container_spec_cpu_quota{namespace=~"chatapp-.*",container!=""} * 100000 > 0.9
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High CPU usage on {{ $labels.pod }}"
+            description: "Container {{ $labels.container }} in pod {{ $labels.pod }} is using {{ $value | humanizePercentage }} of its CPU limit"
+
+        # Pod restart
+        - alert: ChatAppPodRestarting
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace=~"chatapp-.*"}[1h]) > 3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.pod }} is restarting frequently"
+            description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last hour"
+
+        # Database connection issues (if metrics are exposed)
+        - alert: ChatAppDatabaseConnectionError
+          expr: |
+            prisma_pool_connections_idle{namespace=~"chatapp-.*"} == 0
+            and
+            prisma_pool_connections_busy{namespace=~"chatapp-.*"} == prisma_pool_connections_limit{namespace=~"chatapp-.*"}
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Database connection pool exhausted"
+            description: "All database connections are busy with no idle connections available"

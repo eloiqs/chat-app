@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-client
+  labels:
+    app: chatapp
+    component: web-client
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+  selector:
+    app: chatapp
+    component: web-client

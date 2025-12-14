@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-client
+  labels:
+    app: chatapp
+    component: web-client
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: chatapp
+      component: web-client
+  template:
+    metadata:
+      labels:
+        app: chatapp
+        component: web-client
+    spec:
+      containers:
+        - name: web-client
+          image: chatapp/web-client:latest
+          ports:
+            - containerPort: 80
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "25m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"

@@ -1,0 +1,49 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: chatapp-local
+
+resources:
+  - ../../base
+  - namespace.yaml
+  - postgres/
+  - redis/
+  - configmap.yaml
+  - secrets.yaml
+  - ingress.yaml
+
+# Override images for local development
+images:
+  - name: chatapp/server
+    newName: chatapp-server
+    newTag: local
+  - name: chatapp/ws-gateway
+    newName: chatapp-ws-gateway
+    newTag: local
+  - name: chatapp/web-client
+    newName: chatapp-web-client
+    newTag: local
+
+# Reduce replicas for local development
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: server
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: ws-gateway
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: web-client

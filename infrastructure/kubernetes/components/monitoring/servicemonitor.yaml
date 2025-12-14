@@ -1,0 +1,47 @@
+# ServiceMonitor for chatapp server metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: chatapp-server
+  namespace: monitoring
+  labels:
+    app: chatapp
+    component: server
+spec:
+  selector:
+    matchLabels:
+      app: chatapp
+      component: server
+  namespaceSelector:
+    matchNames:
+      - chatapp-staging
+      - chatapp-production
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+---
+# ServiceMonitor for chatapp ws-gateway metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: chatapp-ws-gateway
+  namespace: monitoring
+  labels:
+    app: chatapp
+    component: ws-gateway
+spec:
+  selector:
+    matchLabels:
+      app: chatapp
+      component: ws-gateway
+  namespaceSelector:
+    matchNames:
+      - chatapp-staging
+      - chatapp-production
+  endpoints:
+    - port: websocket
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s

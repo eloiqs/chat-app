@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chatapp-staging
+  labels:
+    app.kubernetes.io/name: chatapp
+    app.kubernetes.io/environment: staging

@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - servicemonitor.yaml
+  - alerting-rules.yaml
+
+# Note: kube-prometheus-stack is installed via Helm
+# See prometheus-values.yaml for configuration
+# Install command:
+# helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+# helm repo update
+# helm install prometheus prometheus-community/kube-prometheus-stack \
+#   -n monitoring \
+#   -f infrastructure/kubernetes/components/monitoring/prometheus-values.yaml

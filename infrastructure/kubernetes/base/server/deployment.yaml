@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server
+  labels:
+    app: chatapp
+    component: server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: chatapp
+      component: server
+  template:
+    metadata:
+      labels:
+        app: chatapp
+        component: server
+    spec:
+      serviceAccountName: server
+      containers:
+        - name: server
+          image: chatapp/server:latest
+          ports:
+            - containerPort: 3001
+              name: http
+          env:
+            - name: PORT
+              value: "3001"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: chatapp-secrets
+                  key: DATABASE_URL
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: chatapp-config
+                  key: REDIS_URL
+            - name: CORS_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: chatapp-config
+                  key: CORS_ORIGINS
+            - name: CORS_CREDENTIALS
+              value: "true"
+          readinessProbe:
+            httpGet:
+              path: /api/chats/users
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/chats/users
+              port: 3001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
