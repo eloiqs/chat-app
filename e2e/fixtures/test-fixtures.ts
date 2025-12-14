@@ -1,5 +1,6 @@
 import { test as base, BrowserContext, Page } from '@playwright/test';
-import { ENV } from 'global-setup';
+import path from 'path';
+import dotenv from 'dotenv';
 import type { User } from 'shared';
 import { loginAsUser } from '../helpers/auth.helper';
 import { addFailedMessage } from '../helpers/storage.helper';
@@ -12,9 +13,11 @@ import { ChatDashboardPage } from '../page-objects/chat-dashboard.page';
 import { ChatMessagesPage } from '../page-objects/chat-messages.page';
 import { UserSelectionPage } from '../page-objects/user-selection.page';
 
-const E2E_DATABASE_URL = `postgresql://${ENV.POSTGRES_USER}:${ENV.POSTGRES_PASSWORD}@localhost:${ENV.POSTGRES_PORT}/${ENV.POSTGRES_DB}`;
-const E2E_SERVER_URL = `http://localhost:${ENV.SERVER_PORT}`;
-const E2E_CLIENT_URL = `http://localhost:${ENV.CLIENT_PORT}`;
+dotenv.config({ path: path.resolve(__dirname, '../../.env.e2e') });
+
+const E2E_DATABASE_URL = `postgresql://${process.env.POSTGRES_USER}:${process.env.POSTGRES_PASSWORD}@localhost:${process.env.POSTGRES_PORT}/${process.env.POSTGRES_DB}`;
+const E2E_SERVER_URL = `http://localhost:${process.env.SERVER_PORT}`;
+const E2E_CLIENT_URL = `http://localhost:${process.env.CLIENT_PORT}`;
 
 type WorkerFixtures = {
   apiURL: string;

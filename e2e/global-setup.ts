@@ -1,20 +1,10 @@
 import { execSync } from 'child_process';
+import dotenv from 'dotenv';
 import path from 'path';
 
-const ROOT_DIR = path.resolve(__dirname, '..');
+dotenv.config({ path: path.resolve(__dirname, '../.env.e2e') });
 
-// Environment variables, see .env.example
-export const ENV = {
-  POSTGRES_USER: 'chatapp',
-  POSTGRES_PASSWORD: 'chatapp',
-  POSTGRES_DB: 'chatapp_e2e',
-  POSTGRES_PORT: '5442',
-  REDIS_PORT: '6389',
-  SERVER_PORT: '3021',
-  WS_PORT: '3022',
-  CLIENT_PORT: '5193',
-  CORS_ORIGINS: 'http://localhost:5193',
-};
+const ROOT_DIR = path.resolve(__dirname, '..');
 
 function log(message: string) {
   console.log(`[e2e-setup] ${message}`);
@@ -48,21 +38,12 @@ async function waitForService(
 }
 
 export default async function globalSetup(): Promise<void> {
-  log('Starting E2E environment with docker-compose');
-
-  const envVars = Object.entries(ENV)
-    .map(([key, value]) => `${key}=${value}`)
-    .join(' ');
-
-  // Start all services
-  exec(`${envVars} docker compose -p e2e up -d --build --wait`);
-
   // Additional wait for services to be fully ready
   await waitForService(
-    `http://localhost:${ENV.SERVER_PORT}/api/chats/users`,
+    `http://localhost:${process.env.SERVER_PORT}/api/chats/users`,
     'Server',
   );
-  await waitForService(`http://localhost:${ENV.CLIENT_PORT}`, 'Client');
+  await waitForService(`http://localhost:${process.env.CLIENT_PORT}`, 'Client');
 
   log('E2E environment is ready');
 }

@@ -109,11 +109,11 @@ test.describe('Send Message - Chat Isolation', () => {
     // The sending message should NOT be visible in second chat
     await chatMessagesPage.expectMessageNotVisible(testMessage);
 
-    // Complete the request
-    controller.continueAll();
-
     // Navigate back to first chat and verify message was sent
     await chatDashboardPage.selectChatById(testData.chats[0].id);
+
+    // Complete the request
+    controller.continueAll();
     await chatMessagesPage.expectMessageSent(testMessage);
     await chatMessagesPage.expectMessageVisible(testMessage);
   });
