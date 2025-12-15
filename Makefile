@@ -1,6 +1,6 @@
 # Makefile for ChatApp DevOps Operations
 
-.PHONY: help local-setup local-up local-down local-logs local-build \
+.PHONY: help local-setup local-up local-down local-stop local-start local-logs local-build \
         tf-init tf-plan tf-apply tf-destroy \
         deploy monitoring-install monitoring-port-forward \
         docker-build docker-push
@@ -13,7 +13,9 @@ help:
 	@echo "  make local-setup     - Initialize minikube and deploy app"
 	@echo "  make local-build     - Build Docker images for local use"
 	@echo "  make local-up        - Deploy/update local environment"
-	@echo "  make local-down      - Tear down local environment"
+	@echo "  make local-stop      - Stop all deployments (preserves data)"
+	@echo "  make local-start     - Start all deployments"
+	@echo "  make local-down      - Tear down environment (DELETES ALL DATA)"
 	@echo "  make local-logs      - Tail logs from all services"
 	@echo "  make local-restart   - Restart all deployments"
 	@echo ""
@@ -49,7 +51,7 @@ local-build:
 	docker build -t chatapp-server:local -f server/Dockerfile . && \
 	docker build -t chatapp-ws-gateway:local -f ws-gateway/Dockerfile . && \
 	docker build -t chatapp-web-client:local \
-		--build-arg VITE_SERVER_URL=http://chatapp.local/api \
+		--build-arg VITE_SERVER_URL=http://chatapp.local \
 		--build-arg VITE_WS_URL=http://chatapp.local \
 		-f web-client/Dockerfile .
 	@echo "Build complete!"
@@ -63,8 +65,23 @@ local-up: local-build
 	kubectl rollout status deployment/web-client -n chatapp-local --timeout=60s
 	@echo "Deployment complete! Access at http://chatapp.local"
 
+local-stop:
+	@echo "Stopping local environment (preserving data)..."
+	kubectl scale deployment --all --replicas=0 -n chatapp-local
+	@echo "All deployments stopped. Data preserved."
+
+local-start:
+	@echo "Starting local environment..."
+	kubectl scale deployment postgres --replicas=1 -n chatapp-local
+	kubectl wait --for=condition=available deployment/postgres -n chatapp-local --timeout=60s
+	kubectl scale deployment redis --replicas=1 -n chatapp-local
+	kubectl scale deployment server --replicas=1 -n chatapp-local
+	kubectl scale deployment ws-gateway --replicas=1 -n chatapp-local
+	kubectl scale deployment web-client --replicas=1 -n chatapp-local
+	@echo "All deployments started."
+
 local-down:
-	@echo "Tearing down local environment..."
+	@echo "Tearing down local environment (ALL DATA WILL BE LOST)..."
 	kubectl delete -k infrastructure/kubernetes/overlays/local --ignore-not-found
 	@echo "Teardown complete!"
 

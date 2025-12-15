@@ -7,6 +7,7 @@ import { GatewayModule } from './gateway/gateway.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: '.env',
     }),
     RedisModule,
     GatewayModule,

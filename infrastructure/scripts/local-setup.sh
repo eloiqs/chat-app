@@ -34,7 +34,7 @@ command -v docker >/dev/null 2>&1 || {
 echo -e "${YELLOW}Checking minikube status...${NC}"
 if ! minikube status | grep -q "Running"; then
     echo -e "${YELLOW}Starting minikube...${NC}"
-    minikube start --cpus=4 --memory=8192 --driver=docker
+    minikube start --cpus=4 --memory=7836 --driver=docker
 else
     echo -e "${GREEN}Minikube is already running${NC}"
 fi
@@ -59,9 +59,13 @@ docker build -t chatapp-ws-gateway:local -f ws-gateway/Dockerfile .
 
 echo "Building web-client image..."
 docker build -t chatapp-web-client:local \
-    --build-arg VITE_SERVER_URL=http://chatapp.local/api \
+    --build-arg VITE_SERVER_URL=http://chatapp.local \
     --build-arg VITE_WS_URL=http://chatapp.local \
     -f web-client/Dockerfile .
+
+# Delete any existing migration job (Jobs are immutable, so we need to delete before re-creating)
+echo -e "${YELLOW}Cleaning up any existing migration job...${NC}"
+kubectl delete job db-migration -n chatapp-local --ignore-not-found
 
 # Apply Kubernetes manifests
 echo -e "${YELLOW}Deploying to Kubernetes...${NC}"
@@ -72,10 +76,8 @@ echo -e "${YELLOW}Waiting for deployments to be ready...${NC}"
 kubectl wait --for=condition=available deployment/postgres -n chatapp-local --timeout=120s
 kubectl wait --for=condition=available deployment/redis -n chatapp-local --timeout=60s
 
-# Run migrations
-echo -e "${YELLOW}Running database migrations...${NC}"
-kubectl delete job db-migration -n chatapp-local --ignore-not-found
-kubectl apply -k infrastructure/kubernetes/base/migrations -n chatapp-local
+# Wait for migrations to complete
+echo -e "${YELLOW}Waiting for database migrations to complete...${NC}"
 kubectl wait --for=condition=complete job/db-migration -n chatapp-local --timeout=120s
 
 # Wait for app deployments
@@ -83,15 +85,15 @@ kubectl wait --for=condition=available deployment/server -n chatapp-local --time
 kubectl wait --for=condition=available deployment/ws-gateway -n chatapp-local --timeout=60s
 kubectl wait --for=condition=available deployment/web-client -n chatapp-local --timeout=60s
 
-# Get minikube IP and add to /etc/hosts
-MINIKUBE_IP=$(minikube ip)
-echo -e "${YELLOW}Minikube IP: ${MINIKUBE_IP}${NC}"
-
+# Add chatapp.local to /etc/hosts pointing to 127.0.0.1 (for use with minikube tunnel)
 if ! grep -q "chatapp.local" /etc/hosts; then
     echo -e "${YELLOW}Adding chatapp.local to /etc/hosts (requires sudo)...${NC}"
-    echo "$MINIKUBE_IP chatapp.local" | sudo tee -a /etc/hosts
+    echo "127.0.0.1 chatapp.local" | sudo tee -a /etc/hosts
+elif ! grep -q "127.0.0.1 chatapp.local" /etc/hosts; then
+    echo -e "${YELLOW}Updating chatapp.local to use 127.0.0.1 (requires sudo)...${NC}"
+    sudo sed -i '' 's/.* chatapp.local/127.0.0.1 chatapp.local/' /etc/hosts
 else
-    echo -e "${GREEN}chatapp.local already exists in /etc/hosts${NC}"
+    echo -e "${GREEN}chatapp.local already configured in /etc/hosts${NC}"
 fi
 
 # Final status
@@ -100,10 +102,14 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}Local setup complete!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
-echo "Access the application at: http://chatapp.local"
+echo -e "${YELLOW}IMPORTANT: Run 'sudo minikube tunnel' in a separate terminal${NC}"
+echo "This is required on macOS to route traffic to the cluster."
+echo ""
+echo "Once the tunnel is running, access the application at: http://chatapp.local"
 echo ""
 echo "Useful commands:"
-echo "  kubectl get pods -n chatapp-local     # View pod status"
+echo "  sudo minikube tunnel                  # Required to access chatapp.local"
+echo "  kubectl get pods -n chatapp-local    # View pod status"
 echo "  kubectl logs -f deployment/server -n chatapp-local    # View server logs"
 echo "  make local-logs                       # View all logs"
 echo "  make local-down                       # Tear down local environment"

@@ -79,7 +79,7 @@ services:
       - '${WS_PORT:-3002}:${WS_PORT:-3002}'
     environment:
       PORT: ${WS_PORT:-3002}
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://redis:${REDIS_PORT:-6379}
       SERVER_URL: http://server:${SERVER_PORT:-3001}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
       CORS_CREDENTIALS: 'true'

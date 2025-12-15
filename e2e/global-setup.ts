@@ -31,7 +31,7 @@ async function waitForService(
     } catch {
       // Service not ready yet
     }
-    log(`Waiting for ${name}... (${i + 1}/${maxRetries})`);
+    log(`Waiting for ${name} at ${url}... (${i + 1}/${maxRetries})`);
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
   throw new Error(`${name} did not become ready in time at ${url}`);
